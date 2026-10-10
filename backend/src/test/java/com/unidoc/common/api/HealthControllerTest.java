@@ -4,11 +4,16 @@ import com.unidoc.common.web.ApiErrorWriter;
 import com.unidoc.common.web.JsonAccessDeniedHandler;
 import com.unidoc.common.web.JsonAuthenticationEntryPoint;
 import com.unidoc.common.web.RequestIdFilter;
-import com.unidoc.config.BaselineSecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -19,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(HealthController.class)
 @Import({
-        BaselineSecurityConfig.class,
+        HealthControllerTest.TestSecurityConfiguration.class,
         ApiErrorWriter.class,
         JsonAuthenticationEntryPoint.class,
         JsonAccessDeniedHandler.class,
@@ -48,5 +53,30 @@ class HealthControllerTest {
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty())
                 .andExpect(header().doesNotExist("Set-Cookie"));
+    }
+
+    @TestConfiguration
+    static class TestSecurityConfiguration {
+
+        @Bean
+        SecurityFilterChain testSecurityFilterChain(
+                HttpSecurity http,
+                JsonAuthenticationEntryPoint authenticationEntryPoint,
+                JsonAccessDeniedHandler accessDeniedHandler
+        ) throws Exception {
+            http
+                    .csrf(AbstractHttpConfigurer::disable)
+                    .formLogin(AbstractHttpConfigurer::disable)
+                    .httpBasic(AbstractHttpConfigurer::disable)
+                    .logout(AbstractHttpConfigurer::disable)
+                    .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                    .exceptionHandling(exceptions -> exceptions
+                            .authenticationEntryPoint(authenticationEntryPoint)
+                            .accessDeniedHandler(accessDeniedHandler))
+                    .authorizeHttpRequests(authorize -> authorize
+                            .requestMatchers("/api/health").permitAll()
+                            .anyRequest().authenticated());
+            return http.build();
+        }
     }
 }

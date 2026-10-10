@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "UNIDOC_DB_URL=jdbc:h2:mem:unidoc;MODE=MySQL;DB_CLOSE_DELAY=-1",
         "UNIDOC_DB_USERNAME=sa",
         "UNIDOC_DB_PASSWORD=",
-        "UNIDOC_JWT_SECRET=test-configuration-secret",
+        "UNIDOC_JWT_SECRET=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
         "UNIDOC_STORAGE_ROOT=target/context-test-uploads",
         "spring.datasource.driver-class-name=org.h2.Driver"
 })

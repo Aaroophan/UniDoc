@@ -48,7 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest
+@WebMvcTest(controllers = ApiHttpFoundationTest.TestController.class)
 @Import({
         ApiHttpFoundationTest.TestController.class,
         GlobalExceptionHandler.class,

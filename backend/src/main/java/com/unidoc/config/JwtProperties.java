@@ -1,7 +1,8 @@
 package com.unidoc.config;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -9,6 +10,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "app.jwt")
 public record JwtProperties(
         @NotBlank String secret,
-        @Positive long expirationSeconds
+        @NotBlank String issuer,
+        @Min(300) @Max(86400) long expirationSeconds
 ) {
 }
