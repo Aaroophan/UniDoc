@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system. This repository contains the completed Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), plus the Issue 5 frontend authentication and application shell. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Features scheduled for Issues 6 and later are displayed as honest route placeholders until their APIs and screens are implemented.
+UniDoc is a local university document-request management system. This repository contains the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, and Issue 6 student profile management. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Features scheduled for Issue 7 onward retain their explicitly labeled placeholders until their APIs and screens are implemented.
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ The application account must not be MySQL root and must have access only to the 
 
 ## 3. Load `.env` into the current PowerShell process
 
-The later one-click launcher will perform this step. For the Issue 1 baseline, load the file manually from the repository root:
+The later one-click launcher will perform this step. Until the later one-click launcher is implemented, load the file manually from the repository root:
 
 ```powershell
 Get-Content .env |
@@ -127,7 +127,7 @@ Open `http://localhost:5173`. Verify the public API health check separately:
 Invoke-RestMethod http://localhost:8080/api/health
 ```
 
-The response is `{ "status": "ok" }`. Authentication routes are available; the remaining business APIs are added in their approved implementation issues.
+The response is `{ "status": "ok" }`. Authentication and student profile APIs are available; other business APIs are added in their approved implementation issues.
 
 The root wrapper names `start-dev.cmd` and `reset-demo-data.cmd` are reserved for the one-click startup and reset work defined later in the implementation plan; they are intentionally not implemented in Issue 1.
 
@@ -139,11 +139,32 @@ After starting MySQL, the Spring Boot API, and Vite using the commands above, op
 - `/login`: students, staff, and administrators sign in using credentials stored in MySQL. Wrong passwords, inactive accounts, and validation failures show safe messages.
 - `/account`: the authenticated user can read public account data and sign out. The session belongs to this browser tab (`sessionStorage`), and a refresh triggers `/api/auth/me` verification.
 - `/dashboard`: redirects to the current role's entry page. All protected routes require authentication; STUDENT, STAFF, and ADMIN route families also have frontend role guards in addition to the backend's security checks.
-- Routes for profile, catalogue, requests, notifications, managed accounts and reports are already registered but intentionally show placeholders until their assigned later implementation issues. Those placeholders do not imply the related business APIs exist.
+- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Catalogue, request submission/tracking, notifications, managed accounts and reports retain placeholders until their assigned issues. Those placeholders do not imply the business APIs exist.
 
 The frontend API base URL is `VITE_API_BASE_URL` (defaults to `http://localhost:8080`). For a Windows setup, create `frontend/.env.local` with this public value as shown above. Never expose database/JWT/SMTP secrets through `VITE_` variables.
 
 **Manual Issue 5 smoke checks:** register a student; sign in; refresh and confirm the account remains signed in; open `/account` and sign out; verify direct protected URLs redirect to login; verify a valid token revoked by incrementing `users.auth_version` or deactivating the account is rejected on the next protected API request; verify wrong-role route navigation redirects to the appropriate workspace. Repeat the public forms at mobile width and with keyboard-only navigation. Admin and staff accounts are created through the later administration/demo-seed work; they can authenticate now if created independently in MySQL with proper BCrypt hashes.
+
+## Issue 6 student profile management
+
+Authenticated STUDENT users can open `/profile` to view their own academic profile, complete it for the first time, and edit it again without a database administrator. Both `GET /api/student/profile` and `PUT /api/student/profile` derive ownership from the Bearer token; there is no user-ID parameter or staff/admin profile editing endpoint.
+
+The GET response includes account full name and immutable email. If no profile exists, its academic fields and `updatedAt` are `null` and `complete` is `false`. PUT accepts full name, registration number, optional phone, faculty, department, degree programme and academic year (1–8). The service normalizes values, updates the account name and academic profile in one transaction, and returns the canonical saved profile. Duplicate registration numbers produce HTTP 409 `REGISTRATION_NUMBER_ALREADY_EXISTS`; field validation produces HTTP 400 `VALIDATION_ERROR`. A saved name change is reflected in the navigation/account view by refreshing `/api/auth/me`.
+
+The student `/requests` landing page highlights missing profile details, while `/requests/new` checks the authoritative saved profile and provides a `/profile` link when it is incomplete. The backend also exposes `StudentProfileService.requireCompleteForSubmission(currentUserId)` for Issue 11 request creation. The request creation endpoint **does not exist yet**; once implemented in Issue 11 it must independently invoke that service and return 400 `PROFILE_INCOMPLETE` for incomplete profiles. The new-request page itself will be implemented in Issue 12.
+
+### Manual Issue 6 verification
+
+1. Sign in as a newly registered student. Confirm the `/requests` landing page highlights missing profile details; then open `/profile` and check the empty academic form, read-only email and profile-incomplete explanation.
+2. Open `/requests/new` directly and confirm it asks for profile completion rather than displaying the planned request submission form.
+3. Fill in all required fields, using a registration number unique to this student, and save. Confirm success, the saved data, and the updated full name on `/account`.
+4. Reload `/profile`; verify persisted values, `complete=true`, and the Edit profile action. Edit and save with an unchanged registration number, then try a different number and academic years 1 and 8.
+5. Test invalid/blank values, academic years 0 and 9, an unsupported registration character, and an invalid phone. Confirm field errors, preservation of input, and focus on an invalid field.
+6. Use a second student account and attempt the first student's registration number (including lowercase). Confirm the 409 response, a registration-field error, and no disclosed owner information.
+7. Attempt both endpoints without authentication (401) and using STAFF/ADMIN tokens (403). Confirm that changing the JSON `userId`, `role`, `email` or `status` cannot change account ownership/permissions.
+8. Repeat the profile form and prerequisite page at widths of about 360 px, 768 px and 1366 px, including keyboard-only navigation. Finish with `backend\mvnw.cmd -f backend\pom.xml clean test`, `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
+
+See `docs/issue-06-implementation-checklist.md` for the exact automated checks and Issue 11 dependency boundary.
 
 ## Repository boundaries
 

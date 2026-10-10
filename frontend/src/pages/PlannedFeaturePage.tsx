@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { roleHome } from '../auth/guards'
+import { roleHome } from '../auth/routing'
 import { PageHeader } from '../components/PageHeader'
 
 export interface PlannedFeaturePageProps {

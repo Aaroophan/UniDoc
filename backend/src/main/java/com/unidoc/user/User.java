@@ -103,6 +103,11 @@ public class User extends AuditableEntity {
         return fullName;
     }
 
+    /** The student profile service changes this name inside its profile transaction. */
+    public void updateFullName(String fullName) {
+        this.fullName = Objects.requireNonNull(fullName).trim();
+    }
+
     public UserRole getRole() {
         return role;
     }

@@ -54,7 +54,11 @@ export interface BinaryResponse {
 }
 
 function safeFilename(value: string): string {
-  const safe = value.replace(/[\\/\x00-\x1f\x7f"<>:|?*]/g, '_').trim().slice(0, 160)
+  const invalidCharacters = ['\\', '/', '"', '<', '>', ':', '|', '?', '*']
+  const safe = Array.from(value, (character) => {
+    const code = character.codePointAt(0) ?? 0
+    return code < 32 || code === 127 || invalidCharacters.includes(character) ? '_' : character
+  }).join('').trim().slice(0, 160)
   return safe || 'download'
 }
 

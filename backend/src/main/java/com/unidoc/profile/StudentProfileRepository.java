@@ -11,6 +11,8 @@ public interface StudentProfileRepository extends UniDocRepository<StudentProfil
 
     Optional<StudentProfile> findByRegistrationNumber(String registrationNumber);
 
+    boolean existsByRegistrationNumber(String registrationNumber);
+
     boolean existsByRegistrationNumberAndIdNot(String registrationNumber, Long profileId);
 
     default Optional<StudentProfile> findByNormalizedRegistrationNumber(String registrationNumber) {

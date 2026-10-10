@@ -8,6 +8,9 @@ import { AppLayout } from './layout/AppLayout'
 import { PublicLayout } from './layout/PublicLayout'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlannedFeaturePage } from './pages/PlannedFeaturePage'
+import { ProfilePage } from './profile/ProfilePage'
+import { NewRequestProfileGate } from './profile/NewRequestProfileGate'
+import { StudentRequestsLanding } from './profile/StudentRequestsLanding'
 import './styles.css'
 
 function App() {
@@ -30,9 +33,9 @@ function App() {
             <Route path="/notifications" element={<PlannedFeaturePage eyebrow="Your updates" title="Notifications" description="Stay informed about changes to your document requests." issue={9} />} />
 
             <Route element={<RoleRoute allowedRoles={['STUDENT']} />}>
-              <Route path="/profile" element={<PlannedFeaturePage eyebrow="Student profile" title="My academic profile" description="Manage the academic information used when you request a document." issue={6} />} />
-              <Route path="/requests" element={<PlannedFeaturePage eyebrow="Student workspace" title="My requests" description="Track your document requests, their progress and available next actions." issue={12} />} />
-              <Route path="/requests/new" element={<PlannedFeaturePage eyebrow="Student workspace" title="New document request" description="Request a document online and select electronic or physical delivery." issue={12} />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/requests" element={<StudentRequestsLanding />} />
+              <Route path="/requests/new" element={<NewRequestProfileGate />} />
               <Route path="/requests/:requestId" element={<PlannedFeaturePage eyebrow="Student workspace" title="Request details" description="Review your request's current status, history and attached documents." issue={12} />} />
             </Route>
 

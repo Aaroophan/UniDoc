@@ -91,6 +91,23 @@ public class StudentProfile extends AuditableEntity {
         this.academicYear = academicYear;
     }
 
+    /** Update the existing row, preserving its ID, owning account and createdAt. */
+    public void updateDetails(
+            String registrationNumber,
+            String phone,
+            String faculty,
+            String department,
+            String degreeProgramme,
+            int academicYear
+    ) {
+        this.registrationNumber = Normalization.registrationNumber(registrationNumber);
+        this.phone = phone;
+        this.faculty = Objects.requireNonNull(faculty);
+        this.department = Objects.requireNonNull(department);
+        this.degreeProgramme = Objects.requireNonNull(degreeProgramme);
+        this.academicYear = academicYear;
+    }
+
     @PrePersist
     @PreUpdate
     void normalizeRegistrationNumber() {

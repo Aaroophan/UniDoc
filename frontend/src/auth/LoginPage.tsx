@@ -6,7 +6,7 @@ import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { FeedbackBanner } from '../components/FeedbackBanner'
 import type { FeedbackVariant } from '../components/FeedbackBanner'
 import { useAuth } from './AuthContext'
-import { roleHome, safeIntendedLocation } from './guards'
+import { roleHome, safeIntendedLocation } from './routing'
 import { normalizeEmail, validateLogin } from './validation'
 
 interface Feedback {

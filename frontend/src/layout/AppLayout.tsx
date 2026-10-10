@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import type { UserRole } from '../api/contracts'
 import { ROLE_LABELS } from '../api/contracts'
 import { useAuth } from '../auth/AuthContext'
-import { roleHome } from '../auth/guards'
+import { roleHome } from '../auth/routing'
 import { Brand } from '../components/Brand'
 
 interface NavItem {
@@ -50,9 +50,8 @@ export function AppLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [navOpen, setNavOpen] = useState(false)
-
-  useEffect(() => { setNavOpen(false) }, [location.pathname])
+  const [openAtPath, setOpenAtPath] = useState<string | null>(null)
+  const navOpen = openAtPath === location.pathname
   if (!user) return null // ProtectedRoute is the authoritative UI guard.
 
   function signOut() {
@@ -72,7 +71,7 @@ export function AppLayout() {
             aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
             aria-controls="primary-navigation"
             aria-expanded={navOpen}
-            onClick={() => setNavOpen((current) => !current)}
+            onClick={() => setOpenAtPath((current) => current === location.pathname ? null : location.pathname)}
           >
             <span aria-hidden="true" className="menu-lines">☰</span>
           </button>
@@ -92,13 +91,13 @@ export function AppLayout() {
           <div className="sidebar-body">
             <p className="sidebar-section-label">{roleName} workspace</p>
             <nav className="side-nav" aria-label="Main navigation">
-              {NAV_ITEMS[user.role].map((item) => <NavigationItem key={item.to} item={item} close={() => setNavOpen(false)} />)}
+              {NAV_ITEMS[user.role].map((item) => <NavigationItem key={item.to} item={item} close={() => setOpenAtPath(null)} />)}
             </nav>
             <div className="sidebar-divider" />
             <p className="sidebar-section-label">Your space</p>
             <nav className="side-nav" aria-label="Personal navigation">
-              <NavigationItem item={{ label: 'Notifications', to: '/notifications' }} close={() => setNavOpen(false)} />
-              <NavigationItem item={{ label: 'Account settings', to: '/account' }} close={() => setNavOpen(false)} />
+              <NavigationItem item={{ label: 'Notifications', to: '/notifications' }} close={() => setOpenAtPath(null)} />
+              <NavigationItem item={{ label: 'Account settings', to: '/account' }} close={() => setOpenAtPath(null)} />
             </nav>
             <button type="button" className="mobile-nav-sign-out" onClick={signOut}>Sign out</button>
           </div>
