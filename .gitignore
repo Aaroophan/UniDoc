@@ -1,0 +1,21 @@
+# Docs
+/docs
+
+# Local configuration and uploaded bytes must never be committed.
+.env
+frontend/.env.local
+
+# Dependency and build output
+frontend/node_modules/
+frontend/dist/
+backend/target/
+
+# Runtime uploads (retain the empty directory marker)
+data/uploads/*
+!data/uploads/.gitkeep
+
+# Local database exports and logs
+*.sql
+*.dump
+*.bak
+*.log
