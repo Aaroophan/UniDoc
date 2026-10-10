@@ -1,28 +1,59 @@
-import { Route, Routes } from 'react-router-dom'
-import './App.css'
-
-function BaselinePage() {
-  return (
-    <main className="baseline-shell">
-      <section className="baseline-card" aria-labelledby="baseline-title">
-        <p className="baseline-eyebrow">University document requests</p>
-        <h1 id="baseline-title">UniDoc</h1>
-        <p className="baseline-copy">
-          The local development baseline is ready. Student, staff, and
-          administrator workflows will be added in their approved implementation
-          issues.
-        </p>
-        <span className="badge rounded-pill baseline-badge">Issue 1 baseline</span>
-      </section>
-    </main>
-  )
-}
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './auth/AuthProvider'
+import { AccountPage } from './auth/AccountPage'
+import { LoginPage } from './auth/LoginPage'
+import { RegisterPage } from './auth/RegisterPage'
+import { DashboardRedirect, ProtectedRoute, PublicOnlyRoute, RoleRoute } from './auth/guards'
+import { AppLayout } from './layout/AppLayout'
+import { PublicLayout } from './layout/PublicLayout'
+import { NotFoundPage } from './pages/NotFoundPage'
+import { PlannedFeaturePage } from './pages/PlannedFeaturePage'
+import './styles.css'
 
 function App() {
   return (
-    <Routes>
-      <Route path="*" element={<BaselinePage />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route element={<PublicOnlyRoute />}>
+          <Route element={<PublicLayout />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+          </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<DashboardRedirect />} />
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/catalogue" element={<PlannedFeaturePage eyebrow="Document services" title="Document catalogue" description="Browse available university documents and understand the requirements for each one." issue={8} />} />
+            <Route path="/notifications" element={<PlannedFeaturePage eyebrow="Your updates" title="Notifications" description="Stay informed about changes to your document requests." issue={9} />} />
+
+            <Route element={<RoleRoute allowedRoles={['STUDENT']} />}>
+              <Route path="/profile" element={<PlannedFeaturePage eyebrow="Student profile" title="My academic profile" description="Manage the academic information used when you request a document." issue={6} />} />
+              <Route path="/requests" element={<PlannedFeaturePage eyebrow="Student workspace" title="My requests" description="Track your document requests, their progress and available next actions." issue={12} />} />
+              <Route path="/requests/new" element={<PlannedFeaturePage eyebrow="Student workspace" title="New document request" description="Request a document online and select electronic or physical delivery." issue={12} />} />
+              <Route path="/requests/:requestId" element={<PlannedFeaturePage eyebrow="Student workspace" title="Request details" description="Review your request's current status, history and attached documents." issue={12} />} />
+            </Route>
+
+            <Route element={<RoleRoute allowedRoles={['STAFF']} />}>
+              <Route path="/staff/requests" element={<PlannedFeaturePage eyebrow="Staff workspace" title="Request work list" description="Review student document requests and manage their progress." issue={13} />} />
+              <Route path="/staff/requests/:requestId" element={<PlannedFeaturePage eyebrow="Staff workspace" title="Review request" description="Inspect a request, supporting documents and processing actions." issue={13} />} />
+            </Route>
+
+            <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
+              <Route path="/admin/dashboard" element={<PlannedFeaturePage eyebrow="Administration" title="Overview" description="A clear view of request activity and document-delivery progress." issue={17} />} />
+              <Route path="/admin/users" element={<PlannedFeaturePage eyebrow="Administration" title="Account management" description="Create and manage staff and administrator accounts and review account status." issue={7} />} />
+              <Route path="/admin/document-types" element={<PlannedFeaturePage eyebrow="Administration" title="Document types" description="Manage the documents and requirements available to students." issue={8} />} />
+              <Route path="/admin/requests" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring" description="Monitor document requests without changing staff workflow states." issue={17} />} />
+              <Route path="/admin/requests/:requestId" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring detail" description="Review request and student information in a read-only view." issue={17} />} />
+              <Route path="/admin/reports" element={<PlannedFeaturePage eyebrow="Administration" title="Reports" description="Filter request records and export a report as CSV." issue={17} />} />
+            </Route>
+          </Route>
+        </Route>
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </AuthProvider>
   )
 }
 

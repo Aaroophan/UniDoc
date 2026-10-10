@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system. This repository currently contains the Issue 1 development baseline: one Java 21 Spring Boot API, one React TypeScript frontend, local MySQL configuration, protected local file storage, and the approved architecture documents.
+UniDoc is a local university document-request management system. This repository contains the completed Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), plus the Issue 5 frontend authentication and application shell. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Features scheduled for Issues 6 and later are displayed as honest route placeholders until their APIs and screens are implemented.
 
 ## Prerequisites
 
@@ -127,9 +127,23 @@ Open `http://localhost:5173`. Verify the public API health check separately:
 Invoke-RestMethod http://localhost:8080/api/health
 ```
 
-The response is `{ "status": "ok" }`. All other API routes remain denied until their approved implementation issues are completed.
+The response is `{ "status": "ok" }`. Authentication routes are available; the remaining business APIs are added in their approved implementation issues.
 
 The root wrapper names `start-dev.cmd` and `reset-demo-data.cmd` are reserved for the one-click startup and reset work defined later in the implementation plan; they are intentionally not implemented in Issue 1.
+
+## Issue 5 frontend authentication and navigation
+
+After starting MySQL, the Spring Boot API, and Vite using the commands above, open `http://localhost:5173`:
+
+- `/register`: students create ACTIVE STUDENT accounts with the documented password policy. Registration never signs the user in automatically.
+- `/login`: students, staff, and administrators sign in using credentials stored in MySQL. Wrong passwords, inactive accounts, and validation failures show safe messages.
+- `/account`: the authenticated user can read public account data and sign out. The session belongs to this browser tab (`sessionStorage`), and a refresh triggers `/api/auth/me` verification.
+- `/dashboard`: redirects to the current role's entry page. All protected routes require authentication; STUDENT, STAFF, and ADMIN route families also have frontend role guards in addition to the backend's security checks.
+- Routes for profile, catalogue, requests, notifications, managed accounts and reports are already registered but intentionally show placeholders until their assigned later implementation issues. Those placeholders do not imply the related business APIs exist.
+
+The frontend API base URL is `VITE_API_BASE_URL` (defaults to `http://localhost:8080`). For a Windows setup, create `frontend/.env.local` with this public value as shown above. Never expose database/JWT/SMTP secrets through `VITE_` variables.
+
+**Manual Issue 5 smoke checks:** register a student; sign in; refresh and confirm the account remains signed in; open `/account` and sign out; verify direct protected URLs redirect to login; verify a valid token revoked by incrementing `users.auth_version` or deactivating the account is rejected on the next protected API request; verify wrong-role route navigation redirects to the appropriate workspace. Repeat the public forms at mobile width and with keyboard-only navigation. Admin and staff accounts are created through the later administration/demo-seed work; they can authenticate now if created independently in MySQL with proper BCrypt hashes.
 
 ## Repository boundaries
 
