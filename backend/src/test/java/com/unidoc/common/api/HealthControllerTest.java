@@ -1,5 +1,9 @@
 package com.unidoc.common.api;
 
+import com.unidoc.common.web.ApiErrorWriter;
+import com.unidoc.common.web.JsonAccessDeniedHandler;
+import com.unidoc.common.web.JsonAuthenticationEntryPoint;
+import com.unidoc.common.web.RequestIdFilter;
 import com.unidoc.config.BaselineSecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,11 +13,18 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(HealthController.class)
-@Import(BaselineSecurityConfig.class)
+@Import({
+        BaselineSecurityConfig.class,
+        ApiErrorWriter.class,
+        JsonAuthenticationEntryPoint.class,
+        JsonAccessDeniedHandler.class,
+        RequestIdFilter.class
+})
 class HealthControllerTest {
 
     @Autowired
@@ -25,12 +36,17 @@ class HealthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
                 .andExpect(jsonPath("$.status").value("ok"))
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(header().exists(RequestIdFilter.HEADER_NAME));
     }
 
     @Test
-    void deniesUnconfiguredRoutes() throws Exception {
+    void deniesUnconfiguredRoutesWithSharedAuthenticationError() throws Exception {
         mockMvc.perform(get("/api/not-configured"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
+                .andExpect(header().doesNotExist("Set-Cookie"));
     }
 }
