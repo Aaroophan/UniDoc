@@ -112,6 +112,21 @@ public class User extends AuditableEntity {
         return role;
     }
 
+    /** A real status change invalidates existing JWTs; repeats are idempotent. */
+    public boolean changeStatus(UserStatus nextStatus) {
+        Objects.requireNonNull(nextStatus);
+        if (status == nextStatus) return false;
+        status = nextStatus;
+        authVersion = Math.addExact(authVersion, 1);
+        return true;
+    }
+
+    /** The caller supplies a BCrypt hash, never a raw password. */
+    public void resetPasswordHash(String encodedPassword) {
+        passwordHash = Objects.requireNonNull(encodedPassword);
+        authVersion = Math.addExact(authVersion, 1);
+    }
+
     public UserStatus getStatus() {
         return status;
     }

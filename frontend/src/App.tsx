@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
+import { AdminUsersPage } from './admin/AdminUsersPage'
 import { AccountPage } from './auth/AccountPage'
 import { LoginPage } from './auth/LoginPage'
 import { RegisterPage } from './auth/RegisterPage'
@@ -46,7 +47,7 @@ function App() {
 
             <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
               <Route path="/admin/dashboard" element={<PlannedFeaturePage eyebrow="Administration" title="Overview" description="A clear view of request activity and document-delivery progress." issue={17} />} />
-              <Route path="/admin/users" element={<PlannedFeaturePage eyebrow="Administration" title="Account management" description="Create and manage staff and administrator accounts and review account status." issue={7} />} />
+              <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/document-types" element={<PlannedFeaturePage eyebrow="Administration" title="Document types" description="Manage the documents and requirements available to students." issue={8} />} />
               <Route path="/admin/requests" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring" description="Monitor document requests without changing staff workflow states." issue={17} />} />
               <Route path="/admin/requests/:requestId" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring detail" description="Review request and student information in a read-only view." issue={17} />} />

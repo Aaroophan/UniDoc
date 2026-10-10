@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system. This repository contains the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, and Issue 6 student profile management. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Features scheduled for Issue 7 onward retain their explicitly labeled placeholders until their APIs and screens are implemented.
+UniDoc is a local university document-request management system. This repository contains the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, Issue 6 student profile management, and Issue 7 administrator account management. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Features scheduled for Issue 8 onward retain their explicitly labeled placeholders until their APIs and screens are implemented.
 
 ## Prerequisites
 
@@ -127,7 +127,7 @@ Open `http://localhost:5173`. Verify the public API health check separately:
 Invoke-RestMethod http://localhost:8080/api/health
 ```
 
-The response is `{ "status": "ok" }`. Authentication and student profile APIs are available; other business APIs are added in their approved implementation issues.
+The response is `{ "status": "ok" }`. Authentication, student profile and administrator account management APIs are available; other business APIs are added in their approved implementation issues.
 
 The root wrapper names `start-dev.cmd` and `reset-demo-data.cmd` are reserved for the one-click startup and reset work defined later in the implementation plan; they are intentionally not implemented in Issue 1.
 
@@ -139,7 +139,7 @@ After starting MySQL, the Spring Boot API, and Vite using the commands above, op
 - `/login`: students, staff, and administrators sign in using credentials stored in MySQL. Wrong passwords, inactive accounts, and validation failures show safe messages.
 - `/account`: the authenticated user can read public account data and sign out. The session belongs to this browser tab (`sessionStorage`), and a refresh triggers `/api/auth/me` verification.
 - `/dashboard`: redirects to the current role's entry page. All protected routes require authentication; STUDENT, STAFF, and ADMIN route families also have frontend role guards in addition to the backend's security checks.
-- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Catalogue, request submission/tracking, notifications, managed accounts and reports retain placeholders until their assigned issues. Those placeholders do not imply the business APIs exist.
+- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Catalogue, request submission/tracking, notifications and reports retain placeholders until their assigned issues. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
 
 The frontend API base URL is `VITE_API_BASE_URL` (defaults to `http://localhost:8080`). For a Windows setup, create `frontend/.env.local` with this public value as shown above. Never expose database/JWT/SMTP secrets through `VITE_` variables.
 
@@ -165,6 +165,33 @@ The student `/requests` landing page highlights missing profile details, while `
 8. Repeat the profile form and prerequisite page at widths of about 360 px, 768 px and 1366 px, including keyboard-only navigation. Finish with `backend\mvnw.cmd -f backend\pom.xml clean test`, `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
 
 See `docs/issue-06-implementation-checklist.md` for the exact automated checks and Issue 11 dependency boundary.
+
+## Issue 7 administrator account management
+
+Sign in with an existing **ADMIN** account and open `/admin/users`. This route now provides server-filtered and paginated accounts, sorting, a staff/administrator creation form, activation/deactivation confirmations, and a manual password reset dialog. STAFF and STUDENT cannot enter the page or use its API endpoints. No account deletion, role editing, or forced first-login password change is implemented.
+
+Available administrator API endpoints (all require the ADMIN Bearer token):
+
+| Endpoint | Purpose | Success |
+| --- | --- | --- |
+| `GET /api/admin/users?q=&role=&status=&sort=&direction=&page=&size=` | Search, filter and paginate all accounts | 200 `PageResponse<UserSummary>` |
+| `POST /api/admin/users` | Create STAFF or ADMIN with full name, email, role and initial password | 201 `UserSummary` |
+| `PATCH /api/admin/users/{userId}/status` | Body `{ "status": "ACTIVE" }` or `INACTIVE` | 200 `UserSummary` |
+| `POST /api/admin/users/{userId}/reset-password` | Body `{ "newPassword": "...", "confirmPassword": "..." }` | 204 empty body |
+
+Account creation uses the same password strength rules as registration (8–72 characters with uppercase, lowercase, number and a special character), BCrypt strength 12, and normalized unique email. Both status changes and resets invalidate old tokens by increasing `authVersion`. Repeated setting of the same status does not increase it; self-deactivation is forbidden. Password resets leave inactive accounts inactive. The administrator must communicate new/initial passwords securely **outside** UniDoc: passwords are never displayed, emailed or stored in browser storage.
+
+**Manual Issue 7 acceptance test:**
+
+1. Build with `.\backend\mvnw.cmd -f backend\pom.xml clean test` and `.\backend\mvnw.cmd -f backend\pom.xml clean package` from the repository root on Windows; run `npm --prefix frontend ci`, `npm --prefix frontend run lint`, and `npm --prefix frontend run build`.
+2. Run MySQL, backend and frontend as above; sign in as an existing ADMIN and visit `/admin/users`. Confirm the table/cards show full name, email, role, status and creation date. Search by name/email, filter STUDENT/STAFF/ADMIN and ACTIVE/INACTIVE, apply each sort/direction, clear filters and navigate pages.
+3. Create one STAFF and one ADMIN with unique email addresses. Check they are ACTIVE, can log in and have only their role's workspace. Attempt the same email with different casing, weak password and mismatched/reset confirmation; expect an inline error. The creation role selector must never offer STUDENT.
+4. Log in as the newly created STAFF in another browser tab. As the original admin, deactivate that account. The staff's very next authenticated request must return 403 `ACCOUNT_INACTIVE` and subsequent login must fail. Repeat deactivation and confirm no extra revocation. Reactivate; confirm a fresh login succeeds, but the old token remains invalid (401 `SESSION_REVOKED`).
+5. Reset that user's password. Confirm HTTP 204, old password and old Bearer token fail (401), new password succeeds, and an inactive user's reset does not reactivate their account. Check self-deactivation returns 409 `SELF_DEACTIVATION_NOT_ALLOWED` via a direct API call. If an admin resets their own password using the UI, the frontend should immediately sign out.
+6. Confirm `GET /api/admin/users` returns 401 without a token and 403 with STAFF/STUDENT tokens; repeat against mutations. Test bad `page`, `size`, `sort`, `direction` and `role` query values: expected 400. Confirm no password hash, `authVersion` or DELETE action is exposed.
+7. Repeat at approximately 360 px, 768 px and 1366 px and with keyboard-only navigation. Check dialog focus, Escape/cancel behavior, validation, error recovery and horizontal/mobile layout.
+
+See `docs/issue-07-implementation-checklist.md` for feature boundaries and local verification results.
 
 ## Repository boundaries
 
