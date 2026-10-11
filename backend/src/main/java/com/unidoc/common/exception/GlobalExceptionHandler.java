@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -46,6 +47,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -53,6 +57,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -117,6 +122,36 @@ public class GlobalExceptionHandler {
                 "You do not have permission to perform this action.",
                 request
         );
+    }
+
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    ResponseEntity<ApiErrorResponse> handleUnmappedResource(Exception exception, HttpServletRequest request) {
+        return expected(
+                HttpStatus.NOT_FOUND,
+                ApiErrorCode.RESOURCE_NOT_FOUND,
+                "The requested resource was not found.",
+                request
+        );
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ApiErrorResponse> handleUnsupportedHttpMethod(
+            HttpRequestMethodNotSupportedException exception,
+            HttpServletRequest request
+    ) {
+        ResponseEntity<ApiErrorResponse> result = expected(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                ApiErrorCode.INVALID_REQUEST,
+                "This HTTP method is not supported for the requested endpoint.",
+                request
+        );
+        Set<HttpMethod> allowedMethods = exception.getSupportedHttpMethods();
+        if (allowedMethods == null || allowedMethods.isEmpty()) {
+            return result;
+        }
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .allow(allowedMethods.toArray(new HttpMethod[0]))
+                .body(result.getBody());
     }
 
     @ExceptionHandler(DuplicateEmailException.class)

@@ -201,7 +201,11 @@ class AdminUserHttpTests {
         mvc.perform(get("/api/admin/users").header("Authorization", token).param("q", "A".repeat(101)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_PARAMETER"));
         mvc.perform(delete("/api/admin/users/{id}", admin.getId()).header("Authorization", token))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+        mvc.perform(delete("/api/admin/users").header("Authorization", token))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     private User account(UserRole role) {

@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         updateStoredUser(confirmed, saved.token)
         setState({ status: 'authenticated', user: confirmed, notice: null })
-      } catch (error: unknown) {
+      } catch {
         if (!active || controller.signal.aborted) return
         // Token rejections are handled centrally in the Axios interceptor. A
         // network outage must not admit the user or silently destroy a valid session.
