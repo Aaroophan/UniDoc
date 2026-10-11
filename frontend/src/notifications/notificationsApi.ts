@@ -51,10 +51,13 @@ export async function markAllNotificationsRead(): Promise<void> {
 
 /** Never navigate to a server-supplied external URL from a notification. */
 export function safeNotificationPath(path: string | null): string | null {
-  if (!path || !/^\/(?!\/)[a-zA-Z0-9/_?=&%.\-]*$/.test(path)) return null
+  if (!path || !/^\/(?!\/)[a-zA-Z0-9/_?=&%.-]*$/.test(path)) return null
   try {
     const decoded = decodeURIComponent(path)
-    if (decoded.startsWith('//') || decoded.includes('\\') || /[\x00-\x1f\x7f]/.test(decoded)) return null
+    if (decoded.startsWith('//') || decoded.includes('\\') || [...decoded].some((character) => {
+      const value = character.codePointAt(0) ?? 0
+      return value <= 0x1f || value === 0x7f
+    })) return null
     if (decoded.split('?')[0].split('/').some((part) => part === '..' || part === '.')) return null
     return path
   } catch { return null }
