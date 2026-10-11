@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system. This repository contains the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, Issue 6 student profile management, and Issue 7 administrator account management. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Features scheduled for Issue 8 onward retain their explicitly labeled placeholders until their APIs and screens are implemented.
+UniDoc is a local university document-request management system. This repository implements the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, Issue 6 student profile management, Issue 7 administrator account management, Issue 8 document catalogue, and Issue 9 in-app notifications and best-effort email infrastructure. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Later request workflow, reporting, and demo features remain explicitly labeled placeholders until their respective issues are implemented.
 
 ## Prerequisites
 
@@ -235,3 +235,21 @@ See `docs/issue-08-implementation-checklist.md` for the exact tests and the late
 - `scripts/` is reserved for the documented operational PowerShell scripts.
 
 See `docs/09-deployment-strategy.md` for the complete local deployment design and `docs/12-implementation-plan.md` for the remaining implementation sequence.
+
+
+## Issue 9 - In-app notifications and optional Gmail email
+
+The authenticated `/notifications` page supports read-state/event-type filters, newest-first pagination, marking one or all notifications read, and secure internal navigation links. The application header/sidebar shows the unread count, refreshed after read actions and approximately once per minute. Each authenticated role may access only its own notifications.
+
+| Endpoint | Method | Result |
+| --- | --- | --- |
+| `/api/notifications?read=false&type=REQUEST_SUBMITTED&page=0&size=20` | GET | Owned `PageResponse<NotificationResponse>` |
+| `/api/notifications/unread-count` | GET | `{ "count": 0 }` when empty |
+| `/api/notifications/{id}/read` | POST | Updated notification; no-op when already read |
+| `/api/notifications/read-all` | POST | 204; reads only current recipient's unread rows |
+
+`NotificationService.create(NotificationCommand)` is an internal workflow-only operation that must be called inside the existing database transaction. It persists the notification with the workflow and emits a small event; `EmailNotificationListener` handles the event asynchronously only after commit. There is deliberately **no public endpoint for creating notifications**. Live request-transition notifications will be produced by Issues 11 and 14-16, and demo notifications by Issue 19.
+
+Email stays disabled by default (`UNIDOC_EMAIL_ENABLED=false`); core notifications work without SMTP credentials. To optionally demonstrate Gmail, supply a sender address in `UNIDOC_EMAIL_FROM`, Gmail credentials in `UNIDOC_SMTP_USERNAME` and `UNIDOC_SMTP_APP_PASSWORD`, retain the configured `smtp.gmail.com:587`, SMTP AUTH and STARTTLS settings, then set `UNIDOC_EMAIL_ENABLED=true` and restart. The sender validates enabled configuration at startup. Do not share or commit the App Password. Mail is plain text, includes an authenticated frontend link, and carries neither files nor credentials. A delivery failure is a warning; the committed request and notification persist. No retries or delivery-status records are stored.
+
+See `docs/issue-09-implementation-checklist.md` for focused tests, rollback/SMTP verification, and current feature boundaries.

@@ -5,6 +5,9 @@ import { ROLE_LABELS } from '../api/contracts'
 import { useAuth } from '../auth/AuthContext'
 import { roleHome } from '../auth/routing'
 import { Brand } from '../components/Brand'
+import { NotificationCountContext } from '../notifications/NotificationCountContext'
+import { useNotificationCountState } from '../notifications/useNotificationCountState'
+import '../notifications/notifications.css'
 
 interface NavItem {
   label: string
@@ -32,7 +35,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   ],
 }
 
-function NavigationItem({ item, close }: { item: NavItem; close: () => void }) {
+function NavigationItem({ item, close, unreadCount }: { item: NavItem; close: () => void; unreadCount?: number | null }) {
   return (
     <NavLink
       to={item.to}
@@ -42,6 +45,9 @@ function NavigationItem({ item, close }: { item: NavItem; close: () => void }) {
     >
       <span className="side-nav-indicator" aria-hidden="true" />
       {item.label}
+      {item.to === '/notifications' && typeof unreadCount === 'number' && unreadCount > 0 && (
+        <span className="notification-nav-count" aria-label={`${unreadCount} unread notifications`}>{unreadCount}</span>
+      )}
     </NavLink>
   )
 }
@@ -51,6 +57,7 @@ export function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [openAtPath, setOpenAtPath] = useState<string | null>(null)
+  const notificationCount = useNotificationCountState(user?.id ?? null)
   const navOpen = openAtPath === location.pathname
   if (!user) return null // ProtectedRoute is the authoritative UI guard.
 
@@ -61,6 +68,7 @@ export function AppLayout() {
   const roleName = ROLE_LABELS[user.role]
 
   return (
+    <NotificationCountContext.Provider value={notificationCount}>
     <div className="app-shell">
       <a className="skip-to-content" href="#main-content">Skip to content</a>
       <header className="app-topbar">
@@ -77,7 +85,7 @@ export function AppLayout() {
           </button>
           <Brand compact />
           <div className="topbar-links">
-            <NavLink to="/notifications" className={({ isActive }) => `topbar-link${isActive ? ' active' : ''}`}>Notifications</NavLink>
+            <NavLink to="/notifications" aria-label={notificationCount.unreadCount ? `Notifications, ${notificationCount.unreadCount} unread` : "Notifications"} className={({ isActive }) => `topbar-link${isActive ? ' active' : ''}`}>Notifications{notificationCount.unreadCount !== null && notificationCount.unreadCount > 0 && <span className="notification-nav-count">{notificationCount.unreadCount}</span>}</NavLink>
             <NavLink to="/account" className={({ isActive }) => `topbar-link${isActive ? ' active' : ''}`}>My account</NavLink>
             <button type="button" className="topbar-sign-out" onClick={signOut}>Sign out</button>
           </div>
@@ -96,7 +104,7 @@ export function AppLayout() {
             <div className="sidebar-divider" />
             <p className="sidebar-section-label">Your space</p>
             <nav className="side-nav" aria-label="Personal navigation">
-              <NavigationItem item={{ label: 'Notifications', to: '/notifications' }} close={() => setOpenAtPath(null)} />
+              <NavigationItem item={{ label: 'Notifications', to: '/notifications' }} unreadCount={notificationCount.unreadCount} close={() => setOpenAtPath(null)} />
               <NavigationItem item={{ label: 'Account settings', to: '/account' }} close={() => setOpenAtPath(null)} />
             </nav>
             <button type="button" className="mobile-nav-sign-out" onClick={signOut}>Sign out</button>
@@ -125,5 +133,6 @@ export function AppLayout() {
         </div>
       </div>
     </div>
+    </NotificationCountContext.Provider>
   )
 }

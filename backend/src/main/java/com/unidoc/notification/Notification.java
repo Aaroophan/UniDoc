@@ -121,4 +121,12 @@ public class Notification extends CreatedEntity {
     public Instant getReadAt() {
         return readAt;
     }
+
+    /** A second read is a no-op, preserving the original read timestamp. */
+    public boolean markRead(Instant instant) {
+        if (read) return false;
+        read = true;
+        readAt = Objects.requireNonNull(instant);
+        return true;
+    }
 }

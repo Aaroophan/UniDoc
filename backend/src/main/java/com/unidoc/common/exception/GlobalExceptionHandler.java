@@ -14,6 +14,7 @@ import com.unidoc.common.web.SafeStackTrace;
 import com.unidoc.file.AttachmentNotFoundException;
 import com.unidoc.file.FileStorageException;
 import com.unidoc.file.FileValidationException;
+import com.unidoc.notification.NotificationNotFoundException;
 import com.unidoc.profile.DuplicateRegistrationNumberException;
 import com.unidoc.profile.ProfileIncompleteException;
 import com.unidoc.request.DeliveryMethodMismatchException;
@@ -183,6 +184,12 @@ public class GlobalExceptionHandler {
                 exception.getMessage(),
                 request
         );
+    }
+
+    @ExceptionHandler(NotificationNotFoundException.class)
+    ResponseEntity<ApiErrorResponse> handleNotificationNotFound(
+            NotificationNotFoundException exception, HttpServletRequest request) {
+        return expected(HttpStatus.NOT_FOUND, ApiErrorCode.RESOURCE_NOT_FOUND, exception.getMessage(), request);
     }
 
     @ExceptionHandler(UserNotFoundException.class)

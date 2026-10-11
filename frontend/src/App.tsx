@@ -11,6 +11,7 @@ import { AppLayout } from './layout/AppLayout'
 import { PublicLayout } from './layout/PublicLayout'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { PlannedFeaturePage } from './pages/PlannedFeaturePage'
+import { NotificationsPage } from './notifications/NotificationsPage'
 import { ProfilePage } from './profile/ProfilePage'
 import { NewRequestProfileGate } from './profile/NewRequestProfileGate'
 import { StudentRequestsLanding } from './profile/StudentRequestsLanding'
@@ -33,7 +34,7 @@ function App() {
             <Route path="/dashboard" element={<DashboardRedirect />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/catalogue" element={<DocumentCataloguePage />} />
-            <Route path="/notifications" element={<PlannedFeaturePage eyebrow="Your updates" title="Notifications" description="Stay informed about changes to your document requests." issue={9} />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
 
             <Route element={<RoleRoute allowedRoles={['STUDENT']} />}>
               <Route path="/profile" element={<ProfilePage />} />
