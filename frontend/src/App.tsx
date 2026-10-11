@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
 import { AdminUsersPage } from './admin/AdminUsersPage'
+import { DocumentCataloguePage } from './catalogue/DocumentCataloguePage'
+import { AdminDocumentTypesPage } from './catalogue/AdminDocumentTypesPage'
 import { AccountPage } from './auth/AccountPage'
 import { LoginPage } from './auth/LoginPage'
 import { RegisterPage } from './auth/RegisterPage'
@@ -30,7 +32,7 @@ function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardRedirect />} />
             <Route path="/account" element={<AccountPage />} />
-            <Route path="/catalogue" element={<PlannedFeaturePage eyebrow="Document services" title="Document catalogue" description="Browse available university documents and understand the requirements for each one." issue={8} />} />
+            <Route path="/catalogue" element={<DocumentCataloguePage />} />
             <Route path="/notifications" element={<PlannedFeaturePage eyebrow="Your updates" title="Notifications" description="Stay informed about changes to your document requests." issue={9} />} />
 
             <Route element={<RoleRoute allowedRoles={['STUDENT']} />}>
@@ -48,7 +50,7 @@ function App() {
             <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
               <Route path="/admin/dashboard" element={<PlannedFeaturePage eyebrow="Administration" title="Overview" description="A clear view of request activity and document-delivery progress." issue={17} />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
-              <Route path="/admin/document-types" element={<PlannedFeaturePage eyebrow="Administration" title="Document types" description="Manage the documents and requirements available to students." issue={8} />} />
+              <Route path="/admin/document-types" element={<AdminDocumentTypesPage />} />
               <Route path="/admin/requests" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring" description="Monitor document requests without changing staff workflow states." issue={17} />} />
               <Route path="/admin/requests/:requestId" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring detail" description="Review request and student information in a read-only view." issue={17} />} />
               <Route path="/admin/reports" element={<PlannedFeaturePage eyebrow="Administration" title="Reports" description="Filter request records and export a report as CSV." issue={17} />} />

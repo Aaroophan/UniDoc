@@ -9,6 +9,7 @@ export interface ConfirmDialogProps {
   cancelLabel?: string
   destructive?: boolean
   busy?: boolean
+  disabledConfirm?: boolean
   children?: ReactNode
   onConfirm: () => void
   onCancel: () => void
@@ -17,7 +18,7 @@ export interface ConfirmDialogProps {
 /** Native modal dialog provides focus trapping, inert backdrop and Escape. */
 export function ConfirmDialog({
   open, title, description, confirmLabel = 'Confirm', cancelLabel = 'Cancel',
-  destructive = false, busy = false, children, onConfirm, onCancel,
+  destructive = false, busy = false, disabledConfirm = false, children, onConfirm, onCancel,
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const oldFocus = useRef<HTMLElement | null>(null)
@@ -51,7 +52,7 @@ export function ConfirmDialog({
         {children}
         <div className="d-flex justify-content-end flex-wrap gap-2 mt-4">
           <button type="button" className="btn btn-outline-secondary" onClick={onCancel} disabled={busy}>{cancelLabel}</button>
-          <button type="button" className={`btn ${destructive ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm} disabled={busy}>
+          <button type="button" className={`btn ${destructive ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm} disabled={busy || disabledConfirm}>
             {busy ? 'Please wait...' : confirmLabel}
           </button>
         </div>

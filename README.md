@@ -127,7 +127,7 @@ Open `http://localhost:5173`. Verify the public API health check separately:
 Invoke-RestMethod http://localhost:8080/api/health
 ```
 
-The response is `{ "status": "ok" }`. Authentication, student profile and administrator account management APIs are available; other business APIs are added in their approved implementation issues.
+The response is `{ "status": "ok" }`. Authentication, student profile, administrator account management and document catalogue APIs are available; other business APIs are added in their approved implementation issues.
 
 The root wrapper names `start-dev.cmd` and `reset-demo-data.cmd` are reserved for the one-click startup and reset work defined later in the implementation plan; they are intentionally not implemented in Issue 1.
 
@@ -139,7 +139,7 @@ After starting MySQL, the Spring Boot API, and Vite using the commands above, op
 - `/login`: students, staff, and administrators sign in using credentials stored in MySQL. Wrong passwords, inactive accounts, and validation failures show safe messages.
 - `/account`: the authenticated user can read public account data and sign out. The session belongs to this browser tab (`sessionStorage`), and a refresh triggers `/api/auth/me` verification.
 - `/dashboard`: redirects to the current role's entry page. All protected routes require authentication; STUDENT, STAFF, and ADMIN route families also have frontend role guards in addition to the backend's security checks.
-- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Catalogue, request submission/tracking, notifications and reports retain placeholders until their assigned issues. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
+- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Document catalogue browsing and administrator document-type management are functional in Issue 8; request submission/tracking, notifications and reports retain placeholders until their assigned issues. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
 
 The frontend API base URL is `VITE_API_BASE_URL` (defaults to `http://localhost:8080`). For a Windows setup, create `frontend/.env.local` with this public value as shown above. Never expose database/JWT/SMTP secrets through `VITE_` variables.
 
@@ -192,6 +192,39 @@ Account creation uses the same password strength rules as registration (8–72 c
 7. Repeat at approximately 360 px, 768 px and 1366 px and with keyboard-only navigation. Check dialog focus, Escape/cancel behavior, validation, error recovery and horizontal/mobile layout.
 
 See `docs/issue-07-implementation-checklist.md` for feature boundaries and local verification results.
+
+## Issue 8 document catalogue
+
+All authenticated users can now open `/catalogue` and see only **active** document types, sorted by name, including their supporting-document instructions, delivery methods and collection information when physical delivery is offered. STUDENT users can choose **Request this document**, which navigates to `/requests/new?documentTypeId=...`. The request submission API is Issue 11 and the complete request form is Issue 12; the current frontend continues to enforce profile completeness and displays the honest planned feature state.
+
+An authenticated **ADMIN** opens `/admin/document-types` to create, edit, filter, paginate, activate and deactivate entries. Only admins can use the management APIs. There is no hard deletion. The first five proposal document types are created by the deterministic seed in **Issue 19**, so an empty catalogue before manual creation is expected.
+
+| Endpoint | Role | Response / behavior |
+| --- | --- | --- |
+| `GET /api/document-types` | STUDENT, STAFF, ADMIN | 200 array of active types ordered by name |
+| `GET /api/document-types/{id}` | STUDENT, STAFF, ADMIN | 200 active detail, otherwise 404 `DOCUMENT_TYPE_NOT_FOUND` |
+| `GET /api/admin/document-types?q=&active=&page=&size=&sort=&direction=` | ADMIN | 200 `PageResponse<AdminDocumentTypeResponse>` including inactive |
+| `POST /api/admin/document-types` | ADMIN | 201 new admin document type |
+| `GET /api/admin/document-types/{id}` | ADMIN | 200 editable details including inactive |
+| `PUT /api/admin/document-types/{id}` | ADMIN | 200 full replacement of editable details |
+| `PATCH /api/admin/document-types/{id}/status` | ADMIN | 200, body `{ "active": false }` or `true` |
+
+The creation/PUT JSON body contains `code`, `name`, `description`, `requirements`, `supportingDocumentsRequired`, `electronicAvailable`, `physicalAvailable`, optional `collectionLocation`, optional `collectionInstructions`, and `active`. All Boolean flags must be supplied. A document type must have at least one delivery method; physical delivery requires a collection location. Code/name duplicates return 409 `DOCUMENT_TYPE_CODE_EXISTS`/`DOCUMENT_TYPE_NAME_EXISTS`; invalid fields return 400 `VALIDATION_ERROR`. Codes normalize to uppercase and names compare case-insensitively. Admin `q` searches code/name only, has a 100-character maximum, and only `name`, `code`, `createdAt` and `active` are allowed sort properties. Page starts at 0 and size is 1–100.
+
+**Manual Issue 8 acceptance:**
+
+1. Run `backend\mvnw.cmd -f backend\pom.xml clean test`, `clean package`, `npm --prefix frontend ci`, `npm --prefix frontend run lint`, and `npm --prefix frontend run build`. Start local MySQL, the API and Vite. Sign in as an existing ADMIN.
+2. Open `/admin/document-types`. Confirm the unfiltered list can be empty, filters and pagination render correctly, and only ADMIN can see management controls.
+3. Create an electronic-only **active** document type, omitting collection location. Confirm it appears on `/catalogue` with *Electronic* only and no collection guidance.
+4. Create a physical-only type with a required nonblank collection location, optional instructions, and supporting documents required. Confirm it displays *Physical* only, the location and instructions, and a statement that supporting files are required.
+5. Create a third type supporting both methods and set it **inactive**. Confirm admin listing includes it but `/catalogue` and the shared detail API do not show it. Activate it with confirmation, then verify it appears. Deactivate again and verify shared detail returns 404. Confirm no existing request record is deleted or rewritten.
+6. Edit an existing type. Change the code casing, name, description, requirements and collection guidance; confirm the new saved values are shown, the original creation timestamp is preserved and the audit actor is stored internally. Editing an entry with unchanged code/name must succeed.
+7. Attempt the same code and name with different letter casing (409 with the respective duplicate code), invalid code characters, a too-short description, both methods disabled, missing physical collection location, and overlong instructions (400 field errors). Confirm the form preserves input and focuses an invalid field.
+8. Search by code/name, apply active and inactive filters, change sort/direction, clear filters and navigate pages. Try `size=101` or `sort=passwordHash` directly against the API: expect 400 `INVALID_PARAMETER`.
+9. Sign in separately as STAFF and STUDENT. Confirm both can browse `/catalogue`, both receive 403 on admin endpoints and cannot enter `/admin/document-types`. Confirm unauthenticated catalogue reads return 401. Only STUDENT should see *Request this document*; no role should see a delete action.
+10. Verify at approximately 360, 768 and 1366 px and with keyboard-only navigation. Check the modal scrolls and traps focus, Escape/cancel behavior, required-field feedback, long description wrapping, status confirmation and error/retry states.
+
+See `docs/issue-08-implementation-checklist.md` for the exact tests and the later request-snapshot boundary.
 
 ## Repository boundaries
 

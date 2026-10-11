@@ -61,7 +61,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/student/**").hasRole("STUDENT")
                         .requestMatchers("/api/staff/**").hasRole("STAFF")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/notifications/**", "/api/document-types/**", "/api/auth/me").authenticated()
+                        .requestMatchers("/api/notifications/**", "/api/document-types", "/api/document-types/**", "/api/auth/me").authenticated()
                         .anyRequest().denyAll())
                 .addFilterAfter(activeUserFilter, BearerTokenAuthenticationFilter.class);
 

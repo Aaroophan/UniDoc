@@ -16,6 +16,14 @@ public interface DocumentTypeRepository
 
     boolean existsByName(String name);
 
+    boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
+
+    boolean existsByCodeAndIdNot(String code, Long id);
+
+    Optional<DocumentType> findByIdAndActiveTrue(Long id);
+
     List<DocumentType> findByActiveTrueOrderByNameAsc();
 
     default Optional<DocumentType> findByNormalizedCode(String code) {

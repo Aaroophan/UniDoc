@@ -1,0 +1,52 @@
+/* Issue 8: text-first catalogue browsing and administration, matching the UniDoc maroon shell. */
+.catalogue-summary { color: var(--ud-muted); font-size: .88rem; margin: -.3rem 0 1.35rem; }
+.catalogue-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.3rem; align-items: stretch; }
+.catalogue-card { display: flex; flex-direction: column; gap: 0; padding: 1.8rem; min-width: 0; overflow: hidden; }
+.catalogue-card-top { border-bottom: 1px solid var(--ud-border); padding-bottom: 1.35rem; }
+.catalogue-card-top h2 { letter-spacing: -.025em; overflow-wrap: anywhere; }
+.catalogue-card .section-eyebrow { overflow-wrap: anywhere; }
+.catalogue-description { color: var(--ud-muted); font-size: .92rem; line-height: 1.7; margin: 1rem 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+.catalogue-detail-row { padding: 1.15rem 0; border-bottom: 1px solid var(--ud-border); }
+.catalogue-detail-row:last-of-type { border-bottom: none; }
+.catalogue-detail-row h3 { font-size: .8rem; letter-spacing: .012em; font-weight: 770; color: #40383e; margin: 0 0 .55rem; }
+.catalogue-detail-row p { font-size: .87rem; color: #565059; line-height: 1.65; margin: 0; }
+.catalogue-support { margin-top: .9rem !important; color: #6d4e50 !important; font-weight: 650; }
+.catalogue-collection-info { margin-top: .75rem; padding: .95rem 1.05rem; border: 1px solid #ebe2e4; border-radius: .48rem; background: #fdfafa; }
+.catalogue-collection-info strong { display: block; margin-bottom: .4rem; font-size: .82rem; }
+.catalogue-request-action { margin-top: auto; align-self: flex-start; }
+.catalogue-break-text { overflow-wrap: anywhere; word-break: normal; white-space: pre-line; }
+.catalogue-admin-filters { display: grid; grid-template-columns: minmax(14rem, 2.2fr) repeat(3, minmax(8.3rem, 1fr)); gap: 1rem; align-items: end; }
+.catalogue-admin-filters .form-label { font-size: .82rem; font-weight: 650; }
+.catalogue-admin-results { min-width: 0; overflow: hidden; }
+.catalogue-admin-table-scroll { overflow-x: auto; }
+.catalogue-admin-table { min-width: 59rem; vertical-align: middle; }
+.catalogue-admin-table th { font-size: .78rem; color: var(--ud-muted); background: #faf8f9; padding: 1rem 1.05rem; white-space: nowrap; }
+.catalogue-admin-table td { font-size: .88rem; padding: 1.15rem 1.05rem; }
+.catalogue-admin-table tr:last-child td { border-bottom: none; }
+.catalogue-admin-table td:first-child { max-width: 20rem; }
+.catalogue-code { color: var(--ud-muted); display: block; overflow-wrap: anywhere; font-size: .79rem; margin-top: .28rem; }
+.catalogue-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.catalogue-admin-mobile { padding: 0 1.25rem; }
+.catalogue-admin-mobile-card { padding: 1.5rem 0; border-bottom: 1px solid var(--ud-border); }
+.catalogue-admin-mobile-card:last-child { border: 0; }
+.catalogue-admin-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .95rem; }
+.catalogue-admin-facts dt { color: var(--ud-muted); font-size: .78rem; margin-bottom: .22rem; }
+.catalogue-admin-facts dd { color: #353039; font-size: .86rem; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
+.catalogue-type-form .form-field { margin-bottom: 1rem; }
+.catalogue-type-form .form-label { font-size: .85rem; font-weight: 670; }
+.catalogue-type-form textarea { resize: vertical; min-height: 5.4rem; }
+.catalogue-type-form-group { padding: .88rem 1rem; background: #fcfafb; border: 1px solid var(--ud-border); border-radius: .55rem; margin: 1.1rem 0; }
+.catalogue-type-form-group .form-check + .form-check { margin-top: .55rem; }
+.catalogue-field-error { color: #b42328; font-size: .82rem; margin: .65rem 0 0; }
+.catalogue-editor-note { font-size: .85rem; line-height: 1.65; color: #6c575d; background: #fff8f6; border: 1px solid #efe0df; padding: .85rem; border-radius: .5rem; margin-bottom: .9rem; }
+.catalogue-type-form .form-check-label { font-size: .89rem; }
+@media (max-width: 1180px) { .catalogue-admin-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .catalogue-admin-search { grid-column: 1 / -1; } }
+@media (max-width: 940px) { .catalogue-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 550px) {
+  .catalogue-admin-filters { grid-template-columns: minmax(0, 1fr); }
+  .catalogue-admin-search { grid-column: auto; }
+  .catalogue-card { padding: 1.4rem 1.2rem; }
+  .catalogue-request-action { align-self: stretch; text-align: center; }
+  .catalogue-admin-facts { gap: 1.1rem .7rem; }
+  .catalogue-admin-mobile { padding: 0 1.15rem; }
+}

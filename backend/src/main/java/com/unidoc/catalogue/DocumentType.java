@@ -120,6 +120,33 @@ public class DocumentType extends AuditableEntity {
         this.updatedBy = actor;
     }
 
+    /** Update only editable catalogue values; never rewrite the historical request snapshots. */
+    public void replaceEditable(
+            String code, String name, String description, String requirements,
+            boolean supportingDocumentsRequired, boolean electronicAvailable, boolean physicalAvailable,
+            String collectionLocation, String collectionInstructions, boolean active, User actor
+    ) {
+        this.code = Normalization.documentCode(code);
+        this.name = Objects.requireNonNull(name);
+        this.description = Objects.requireNonNull(description);
+        this.requirements = Objects.requireNonNull(requirements);
+        this.supportingDocumentsRequired = supportingDocumentsRequired;
+        this.electronicAvailable = electronicAvailable;
+        this.physicalAvailable = physicalAvailable;
+        this.collectionLocation = collectionLocation;
+        this.collectionInstructions = collectionInstructions;
+        this.active = active;
+        this.updatedBy = Objects.requireNonNull(actor);
+    }
+
+    /** Repeat status updates leave both the row and its audit timestamp unchanged. */
+    public boolean changeActive(boolean next, User actor) {
+        if (active == next) return false;
+        active = next;
+        updatedBy = Objects.requireNonNull(actor);
+        return true;
+    }
+
     @PrePersist
     @PreUpdate
     void normalizeCode() {
