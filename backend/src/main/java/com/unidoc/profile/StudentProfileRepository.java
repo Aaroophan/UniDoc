@@ -4,10 +4,14 @@ import com.unidoc.common.persistence.Normalization;
 import com.unidoc.common.persistence.UniDocRepository;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.Collection;
 
 public interface StudentProfileRepository extends UniDocRepository<StudentProfile, Long> {
 
     Optional<StudentProfile> findByUserId(Long userId);
+
+    List<StudentProfile> findByUserIdIn(Collection<Long> userIds);
 
     Optional<StudentProfile> findByRegistrationNumber(String registrationNumber);
 

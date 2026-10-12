@@ -67,8 +67,13 @@ public final class DocumentRequestSpecifications {
             filters.add((root, query, builder) -> builder.greaterThanOrEqualTo(root.get("createdAt"), start));
         }
         if (submittedTo != null) {
-            Instant exclusiveEnd = submittedTo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            filters.add((root, query, builder) -> builder.lessThan(root.get("createdAt"), exclusiveEnd));
+            if (submittedTo.equals(LocalDate.MAX)) {
+                Instant lastInstant = submittedTo.atTime(java.time.LocalTime.MAX).toInstant(ZoneOffset.UTC);
+                filters.add((root, query, builder) -> builder.lessThanOrEqualTo(root.get("createdAt"), lastInstant));
+            } else {
+                Instant exclusiveEnd = submittedTo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+                filters.add((root, query, builder) -> builder.lessThan(root.get("createdAt"), exclusiveEnd));
+            }
         }
         if (requiredDate != null) {
             filters.add((root, query, builder) -> builder.equal(root.get("requiredDate"), requiredDate));

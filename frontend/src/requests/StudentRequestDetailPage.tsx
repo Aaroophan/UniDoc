@@ -41,11 +41,7 @@ export function StudentRequestDetailPage() {
 
   useEffect(() => {
     const controller = new AbortController()
-    if (id === null) {
-      setLoadState('not-found')
-      setDetails(null)
-      return () => controller.abort()
-    }
+    if (id === null) return () => controller.abort()
     async function load() {
       setLoadState('loading')
       setLoadError(null)
@@ -86,6 +82,7 @@ export function StudentRequestDetailPage() {
     }
   }
 
+  const visibleLoadState: LoadState = id === null ? 'not-found' : loadState
   const submittedNotice = location.state && typeof location.state === 'object' && 'submitted' in location.state && location.state.submitted === true
   return (
     <>
@@ -93,16 +90,16 @@ export function StudentRequestDetailPage() {
         description="Track your request status, delivery information, supporting documents, and complete history."
         actions={<div className="d-flex flex-wrap gap-2">
           <Link className="btn btn-outline-secondary" to="/requests">Back to My requests</Link>
-          {loadState === 'ready' && <button type="button" className="btn btn-outline-primary" onClick={() => setReload((current) => current + 1)}>Refresh</button>}
+          {visibleLoadState === 'ready' && <button type="button" className="btn btn-outline-primary" onClick={() => setReload((current) => current + 1)}>Refresh</button>}
         </div>} />
-      {submittedNotice && loadState === 'ready' && <div className="mb-4"><FeedbackBanner variant="success" message="Your request was submitted successfully. Keep the request number for tracking." /></div>}
-      {loadState === 'loading' && <PageState status="loading" message="Loading request details..." />}
-      {loadState === 'error' && <PageState status="error" title="Unable to load request"
+      {submittedNotice && visibleLoadState === 'ready' && <div className="mb-4"><FeedbackBanner variant="success" message="Your request was submitted successfully. Keep the request number for tracking." /></div>}
+      {visibleLoadState === 'loading' && <PageState status="loading" message="Loading request details..." />}
+      {visibleLoadState === 'error' && <PageState status="error" title="Unable to load request"
         message={loadError?.message ?? 'Please try again.'} requestId={loadError?.requestId} onRetry={() => setReload((current) => current + 1)} />}
-      {loadState === 'not-found' && <PageState status="empty" title="Request not found"
+      {visibleLoadState === 'not-found' && <PageState status="empty" title="Request not found"
         message="This request could not be found or is not available to this account."
         action={<Link className="btn btn-primary" to="/requests">Return to My requests</Link>} />}
-      {loadState === 'ready' && details && (
+      {visibleLoadState === 'ready' && details && (
         <>
           <section className="surface-card request-status-panel" aria-labelledby="request-status-title">
             <div className="request-status-panel-head">

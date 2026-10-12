@@ -96,4 +96,28 @@ class RequestTransitionValidatorTests {
                 UserRole.STUDENT, RequestStatus.UNDER_REVIEW, DeliveryMethod.ELECTRONIC))
                 .isInstanceOf(InvalidRequestTransitionException.class);
     }
+    @ParameterizedTest
+    @EnumSource(RequestStatus.class)
+    void everyStaffStateAndDeliveryPairHasExactlyTheDocumentedActionSet(RequestStatus status) {
+        for (DeliveryMethod method : DeliveryMethod.values()) {
+            List<RequestAction> expected = switch (status) {
+                case SUBMITTED -> List.of(RequestAction.START_REVIEW);
+                case UNDER_REVIEW -> List.of(RequestAction.REQUEST_INFORMATION, RequestAction.APPROVE,
+                        RequestAction.REJECT);
+                case APPROVED -> List.of(RequestAction.START_PROCESSING);
+                case PROCESSING -> method == DeliveryMethod.ELECTRONIC
+                        ? List.of(RequestAction.UPLOAD_ISSUED_DOCUMENT)
+                        : List.of(RequestAction.READY_FOR_COLLECTION);
+                case READY -> method == DeliveryMethod.ELECTRONIC
+                        ? List.of(RequestAction.DOWNLOAD_ISSUED_DOCUMENT)
+                        : List.of(RequestAction.COMPLETE_COLLECTION);
+                case COMPLETED -> method == DeliveryMethod.ELECTRONIC
+                        ? List.of(RequestAction.DOWNLOAD_ISSUED_DOCUMENT) : List.of();
+                case ADDITIONAL_INFORMATION_REQUIRED, REJECTED -> List.of();
+            };
+            assertThat(rules.availableActions(UserRole.STAFF, status, method)).containsExactlyElementsOf(expected);
+            assertThat(rules.availableActions(UserRole.ADMIN, status, method)).isEmpty();
+        }
+    }
+
 }

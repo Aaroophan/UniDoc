@@ -337,3 +337,36 @@ The new `test:requests` script runs pure TypeScript validation and download-file
 For manual end-to-end verification, start MySQL, load the normal private `.env` into the shell, run the backend (`.\backend\mvnw.cmd -f backend\pom.xml spring-boot:run`) and run Vite (`npm --prefix frontend run dev`) in another shell. Sign in as a STUDENT, complete `/profile`, create an active document type as ADMIN if none exists, then perform both an optional-file electronic request and a required-file physical request (use a small **test** PDF/JPEG/PNG). Confirm the UDR number, owner-scoped list/detail/history, required and optional files, downloading the exact file, and refresh persistence. Use a second student login and an owned-by-another-student direct ID to verify identical 404 behavior. Check error/retry/empty states, invalid/past date, inactive catalogue type, file count/type/size, and duplicate-submission prevention. Repeat the screens at **360 px, 768 px and 1366 px** and with keyboard-only navigation. Do not use sensitive real student files for testing.
 
 See `docs/issue-12-implementation-checklist.md` for the full acceptance matrix and the remaining manual UAT steps. The eleven original architecture documents and Issue 11 request backend are unchanged.
+
+## Issue 13 - Staff work list, request details, and start review
+
+All **ACTIVE STAFF** accounts share one work list at `/staff/requests`. Staff can search by request number, student name, email, or registration number; filter by exact status, document type ID, delivery, submitted date range (both dates inclusive, UTC), and required date; sort by the documented fields; and paginate. The list uses database-side filtering and ordering, with deterministic ID tie-breaking. The document type shown in results and details is the *submission-time snapshot*, not a later catalogue edit. Opening the detail does **not** change the status. Missing student profile data is shown as unavailable rather than breaking the view.
+
+| Endpoint | Access | Result |
+| --- | --- | --- |
+| `GET /api/staff/requests?q=&status=&documentTypeId=&deliveryMethod=&submittedFrom=&submittedTo=&requiredDate=&sort=&direction=&page=&size=` | ACTIVE STAFF | `PageResponse<RequestSummary>` for all matching requests |
+| `GET /api/staff/requests/{requestId}` | ACTIVE STAFF | Complete staff detail including academic profile, request snapshots, supporting files, issued-document metadata (if present), history, available actions, and version |
+| `POST /api/staff/requests/{requestId}/start-review` | ACTIVE STAFF | `{ "expectedVersion": 1 }` -> new staff detail after SUBMITTED → UNDER_REVIEW |
+| `GET /api/staff/requests/{requestId}/attachments/{attachmentId}` | ACTIVE STAFF | Private attachment download after validating both IDs, using safe filename/content headers |
+
+The work-list API defaults to `createdAt desc`, page 0, size 20 (frontend uses size 10), with allowed sort keys `createdAt`, `updatedAt`, `requiredDate`, `status`, and `requestNumber`. Size must be 1–100; `q` at most 120 characters; documentTypeId positive; `submittedFrom` must not be after `submittedTo`. Invalid filters receive 400 `INVALID_PARAMETER`. Unknown request is 404 `REQUEST_NOT_FOUND`, unknown or request-mismatched attachment is 404 `ATTACHMENT_NOT_FOUND`. STUDENT and ADMIN receive 403; unauthenticated requests receive 401. Inactive accounts cannot access staff endpoints.
+
+Start Review is the **only** workflow mutation introduced in Issue 13. It requires a freshly fetched `version` in `expectedVersion`, compares it before modifying the request, checks the current role/status/delivery action and the allowed state edge, and relies on the existing JPA `@Version` check to protect concurrent database transactions. Successful review updates the status to UNDER_REVIEW and appends a single `Review started.` history event with the staff actor in the same transaction; no notification/email is created for this transition. Explicit or database-level stale writes map to 409 `REQUEST_VERSION_CONFLICT`; an unsupported transition maps to 409 `INVALID_REQUEST_TRANSITION`. The frontend shows the conflict, reloads, and **never retries a mutation automatically**. An unconfirmed network result is treated as unknown; refresh and inspect the latest status/history before choosing another action. If the recovery fetch fails, the frontend blocks further mutation until a subsequent explicit refresh succeeds. The remaining backend-computed actions are shown as future steps until their actual commands are implemented in Issues 14-16, not as dead buttons.
+
+Staff downloads require authentication for every request and never serve files from static storage. The browser saves protected blobs with safe response filenames and revokes temporary object URLs. The student download path was refactored to use the same common browser save helper, retaining owner-specific endpoint authorization. Four previous React hook warnings were addressed by stable pagination callbacks, derived invalid-route states, and a keyed student request form.
+
+### Issue 13 verification (Windows PowerShell, from the project root)
+
+```powershell
+.\backend\mvnw.cmd -f backend\pom.xml "-Dtest=StaffRequestServiceTests,StaffRequestHttpTests,StaffRequestOptimisticLockTests,RequestTransitionValidatorTests" test
+.\backend\mvnw.cmd -f backend\pom.xml clean test
+.\backend\mvnw.cmd -f backend\pom.xml clean package
+npm --prefix frontend ci
+npm --prefix frontend run test:requests
+npm --prefix frontend run lint
+npm --prefix frontend run build
+```
+
+For manual acceptance, start local MySQL and load the private `.env` using the existing documented workflow, then start Spring Boot and Vite. Submit requests as a STUDENT. Open two distinct ACTIVE STAFF sessions at `/staff/requests` and verify identical records, text/date/type/status/delivery filters, clearing, and pagination. Both staff should open the same SUBMITTED request and note its version. Let the first staff member select **Start review**, confirm the status/history/version changed, then have the second staff attempt their still-open Start Review: the API must reject their stale version and the browser must show a conflict and refreshed UNDER_REVIEW state without creating a duplicate history row. Check supporting file download and request/attachment mismatch, role denial for STUDENT/ADMIN, inactive staff denial, long file/name wrapping, and 360/768/1366-pixel layouts. Do not use real personal records for test data.
+
+See `docs/issue-13-implementation-checklist.md` for the implementation coverage and verification status. The 11 architecture documents remain unchanged.

@@ -1,4 +1,5 @@
-import { apiClient, getBinaryResource } from '../api/client'
+import { apiClient } from '../api/client'
+import { saveAuthenticatedDownload } from '../api/saveDownload'
 import type { DeliveryMethod, PageResponse, RequestStatus, UserRole } from '../api/contracts'
 
 const REQUESTS_PATH = '/api/student/requests'
@@ -154,22 +155,8 @@ export async function getStudentRequest(id: number, signal?: AbortSignal): Promi
  * The page never sees private paths, public file URLs, or object-URL lifecycle details.
  */
 export async function saveStudentAttachment(requestId: number, attachment: StudentRequestAttachment): Promise<void> {
-  const resource = await getBinaryResource(
+  return saveAuthenticatedDownload(
     `${REQUESTS_PATH}/${requirePositiveId(requestId)}/attachments/${requirePositiveId(attachment.id)}`,
     attachment.originalFilename || 'supporting-document',
   )
-  if (!resource.blob || resource.blob.size === 0) throw new Error('The document download was empty. Please try again.')
-
-  const objectUrl = URL.createObjectURL(resource.blob)
-  try {
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = resource.filename
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    try { link.click() } finally { link.remove() }
-  } finally {
-    // Allow the browser to begin the save before releasing its temporary backing URL.
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
-  }
 }

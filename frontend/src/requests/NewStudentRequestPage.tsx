@@ -35,11 +35,15 @@ function mappedFieldErrors(fields: Record<string, string> | null): RequestFormEr
 }
 
 export function NewStudentRequestPage() {
+  const [searchParams] = useSearchParams()
+  const typeId = parsePositiveId(searchParams.get('documentTypeId'))
+  // A new selected type remounts the entire form, clearing all fields and selected files.
+  return <NewStudentRequestForm key={typeId ?? 'choose-type'} typeId={typeId} />
+}
+
+function NewStudentRequestForm({ typeId }: { typeId: number | null }) {
   const navigate = useNavigate()
   const { refreshUnreadCount } = useNotificationCount()
-  const [searchParams] = useSearchParams()
-  const rawTypeId = searchParams.get('documentTypeId')
-  const typeId = parsePositiveId(rawTypeId)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [catalogueType, setCatalogueType] = useState<CatalogueDocumentType | null>(null)
   const [profile, setProfile] = useState<StudentProfileResponse | null>(null)
@@ -60,11 +64,7 @@ export function NewStudentRequestPage() {
 
   useEffect(() => {
     const controller = new AbortController()
-    if (typeId === null) {
-      setLoadState('choose-type')
-      setCatalogueType(null)
-      return () => controller.abort()
-    }
+    if (typeId === null) return () => controller.abort()
     async function load() {
       setLoadState('loading')
       setLoadError(null)
@@ -106,19 +106,6 @@ export function NewStudentRequestPage() {
     void load()
     return () => controller.abort()
   }, [typeId, reload])
-
-  // A different selected document must never inherit data or files from the prior selection.
-  useEffect(() => {
-    setPurpose('')
-    setRequiredDate('')
-    setDeliveryMethod('')
-    setFiles([])
-    setErrors({})
-    setFeedback(null)
-    setOutcomeUnknown(false)
-    setToday(localToday())
-    if (fileInput.current) fileInput.current.value = ''
-  }, [typeId])
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const incoming = Array.from(event.currentTarget.files ?? [])
@@ -200,20 +187,22 @@ export function NewStudentRequestPage() {
   }
 
   const description = 'Check the document requirements and your profile before sending a new request.'
+  const visibleLoadState: LoadState = typeId === null ? 'choose-type' : loadState
+
   return (
     <>
       <PageHeader eyebrow="Student workspace" title="New document request" description={description}
         actions={<Link to="/catalogue" className="btn btn-outline-secondary">Back to catalogue</Link>} />
-      {loadState === 'loading' && <PageState status="loading" message="Checking your profile and the selected document type..." />}
-      {loadState === 'error' && <PageState status="error" title="Unable to prepare your request" message={loadError?.message ?? 'Please try again.'}
+      {visibleLoadState === 'loading' && <PageState status="loading" message="Checking your profile and the selected document type..." />}
+      {visibleLoadState === 'error' && <PageState status="error" title="Unable to prepare your request" message={loadError?.message ?? 'Please try again.'}
         requestId={loadError?.requestId} onRetry={() => setReload((current) => current + 1)} />}
-      {loadState === 'choose-type' && <PageState status="empty" title="Choose a document first"
+      {visibleLoadState === 'choose-type' && <PageState status="empty" title="Choose a document first"
         message="Start in the document catalogue to select an available document type and delivery option."
         action={<Link to="/catalogue" className="btn btn-primary">Browse document catalogue</Link>} />}
-      {loadState === 'unavailable' && <PageState status="empty" title="This document is no longer available"
+      {visibleLoadState === 'unavailable' && <PageState status="empty" title="This document is no longer available"
         message="The selected document type is unavailable or has changed. Choose an active document from the catalogue."
         action={<Link to="/catalogue" className="btn btn-primary">Return to catalogue</Link>} />}
-      {loadState === 'incomplete' && (
+      {visibleLoadState === 'incomplete' && (
         <section className="surface-card profile-required" aria-labelledby="student-profile-required-title">
           <p className="section-eyebrow mb-2">Action required</p>
           <h2 className="h4 mb-3" id="student-profile-required-title">Complete your academic profile first</h2>
@@ -225,7 +214,7 @@ export function NewStudentRequestPage() {
           </div>
         </section>
       )}
-      {loadState === 'ready' && catalogueType && profile && (
+      {visibleLoadState === 'ready' && catalogueType && profile && (
         <>
           <section className="surface-card request-type-overview" aria-labelledby="new-request-type-title">
             <div className="request-type-header">

@@ -16,6 +16,8 @@ import { ProfilePage } from './profile/ProfilePage'
 import { NewStudentRequestPage } from './requests/NewStudentRequestPage'
 import { MyRequestsPage } from './requests/MyRequestsPage'
 import { StudentRequestDetailPage } from './requests/StudentRequestDetailPage'
+import { StaffWorkListPage } from './staff/StaffWorkListPage'
+import { StaffRequestDetailPage } from './staff/StaffRequestDetailPage'
 import './styles.css'
 
 function App() {
@@ -45,8 +47,8 @@ function App() {
             </Route>
 
             <Route element={<RoleRoute allowedRoles={['STAFF']} />}>
-              <Route path="/staff/requests" element={<PlannedFeaturePage eyebrow="Staff workspace" title="Request work list" description="Review student document requests and manage their progress." issue={13} />} />
-              <Route path="/staff/requests/:requestId" element={<PlannedFeaturePage eyebrow="Staff workspace" title="Review request" description="Inspect a request, supporting documents and processing actions." issue={13} />} />
+              <Route path="/staff/requests" element={<StaffWorkListPage />} />
+              <Route path="/staff/requests/:requestId" element={<StaffRequestDetailPage />} />
             </Route>
 
             <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DELIVERY_METHOD_LABELS, DELIVERY_METHODS, REQUEST_STATUSES, REQUEST_STATUS_LABELS } from '../api/contracts'
 import type { DeliveryMethod, PageResponse, RequestStatus } from '../api/contracts'
@@ -44,7 +44,7 @@ export function MyRequestsPage() {
     })
   }
 
-  function setPage(nextPage: number, replace = false) {
+  const setPage = useCallback((nextPage: number, replace = false) => {
     if (!Number.isInteger(nextPage) || nextPage < 0) return
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous)
@@ -52,7 +52,7 @@ export function MyRequestsPage() {
       else next.delete('page')
       return next
     }, { replace })
-  }
+  }, [setSearchParams])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -87,7 +87,7 @@ export function MyRequestsPage() {
     }
     void load()
     return () => controller.abort()
-  }, [status, deliveryMethod, page, reload])
+  }, [status, deliveryMethod, page, reload, setPage])
 
   function clearFilters() {
     setSearchParams(new URLSearchParams())
