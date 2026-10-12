@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system. This repository implements the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, Issue 6 student profile management, Issue 7 administrator account management, Issue 8 document catalogue, Issue 9 in-app notifications and best-effort email infrastructure, and Issue 10 protected local file storage. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Later request workflow, reporting, and demo features remain explicitly labeled placeholders until their respective issues are implemented.
+UniDoc is a local university document-request management system. This repository implements the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, Issue 6 student profile management, Issue 7 administrator account management, Issue 8 document catalogue, Issue 9 in-app notifications and best-effort email infrastructure, Issue 10 protected local file storage, and Issue 11 the student request submission/tracking backend. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Student request creation, owner-scoped lists/details, and attachment downloads are available through the backend API as of Issue 11. The student submission/tracking pages are implemented in Issue 12; staff workflow, delivery, reports, and deterministic demo data remain later issues.
 
 ## Prerequisites
 
@@ -139,7 +139,7 @@ After starting MySQL, the Spring Boot API, and Vite using the commands above, op
 - `/login`: students, staff, and administrators sign in using credentials stored in MySQL. Wrong passwords, inactive accounts, and validation failures show safe messages.
 - `/account`: the authenticated user can read public account data and sign out. The session belongs to this browser tab (`sessionStorage`), and a refresh triggers `/api/auth/me` verification.
 - `/dashboard`: redirects to the current role's entry page. All protected routes require authentication; STUDENT, STAFF, and ADMIN route families also have frontend role guards in addition to the backend's security checks.
-- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Document catalogue browsing and administrator document-type management are functional in Issue 8; request submission/tracking and reports retain placeholders until their assigned issues; notifications are functional as of Issue 9. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
+- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Document catalogue browsing and administrator document-type management are functional in Issue 8; student request submission/tracking **pages** and reports retain placeholders until their assigned issues; notifications are functional as of Issue 9. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
 
 The frontend API base URL is `VITE_API_BASE_URL` (defaults to `http://localhost:8080`). For a Windows setup, create `frontend/.env.local` with this public value as shown above. Never expose database/JWT/SMTP secrets through `VITE_` variables.
 
@@ -151,7 +151,7 @@ Authenticated STUDENT users can open `/profile` to view their own academic profi
 
 The GET response includes account full name and immutable email. If no profile exists, its academic fields and `updatedAt` are `null` and `complete` is `false`. PUT accepts full name, registration number, optional phone, faculty, department, degree programme and academic year (1–8). The service normalizes values, updates the account name and academic profile in one transaction, and returns the canonical saved profile. Duplicate registration numbers produce HTTP 409 `REGISTRATION_NUMBER_ALREADY_EXISTS`; field validation produces HTTP 400 `VALIDATION_ERROR`. A saved name change is reflected in the navigation/account view by refreshing `/api/auth/me`.
 
-The student `/requests` landing page highlights missing profile details, while `/requests/new` checks the authoritative saved profile and provides a `/profile` link when it is incomplete. The backend also exposes `StudentProfileService.requireCompleteForSubmission(currentUserId)` for Issue 11 request creation. The request creation endpoint **does not exist yet**; once implemented in Issue 11 it must independently invoke that service and return 400 `PROFILE_INCOMPLETE` for incomplete profiles. The new-request page itself will be implemented in Issue 12.
+The student `/requests` landing page highlights missing profile details, while `/requests/new` checks the authoritative saved profile and provides a `/profile` link when it is incomplete. The backend also exposes `StudentProfileService.requireCompleteForSubmission(currentUserId)` for Issue 11 request creation. The Issue 11 request creation endpoint now independently enforces profile completeness and returns 400 `PROFILE_INCOMPLETE` for an incomplete profile. The browser request submission/tracking pages are added in Issue 12.
 
 ### Manual Issue 6 verification
 
@@ -271,3 +271,41 @@ Configuration retains `UNIDOC_STORAGE_ROOT=./data/uploads`, `UNIDOC_SUPPORTING_M
 **Integration outline for Issues 11, 14 and 15:** validate all multipart files first; stage them; perform the database transaction, using `finalizeFiles` only after the request ID and workflow prerequisites have been established; persist every `StoredFile` in that same transaction. Wrap the transactional service invocation in an outer `try/catch` that calls `cleanup(operation)` on *all* failure outcomes, including database commit failures that occur after the transactional method returns; then rethrow the original exception. On success, leave finalized files untouched. A failed email must not undo a committed file and record.
 
 **Windows verification:** from the project root with the usual `.env` loaded, run `./backend/mvnw.cmd -f backend/pom.xml "-Dtest=FileStorageServiceTests,StoragePathsTest,StorageConfigurationTests,SanitizedFileNamesTests,FileDownloadHeadersTests,FileDownloadHttpTests" test` (PowerShell supports `./`; use `.\backend\mvnw.cmd` if preferred), then the full `clean test` / `clean package` and frontend `lint` / `build` commands shown earlier. All file tests use temporary directories rather than the configured real upload root. Confirm that placing a marker file under `data/uploads/` cannot be retrieved by a direct `/data/uploads/...` or `/uploads/...` URL. Do not test by posting secrets or confidential personal documents. For details see `docs/issue-10-implementation-checklist.md`.
+
+
+## Issue 11 — Student request submission and tracking backend
+
+The following STUDENT-only endpoints are implemented; every call requires an active student Bearer token and **all record/file access is owner scoped**:
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/student/requests` | Create request with multipart JSON `request` and zero to three `files` (201) |
+| `GET` | `/api/student/requests` | Own requests, optional `status`, `deliveryMethod`, `sort`, `direction`, `page`, `size` |
+| `GET` | `/api/student/requests/{requestId}` | Own request, attachment metadata and ordered status history |
+| `GET` | `/api/student/requests/{requestId}/attachments/{attachmentId}` | Authorized PDF/JPEG/PNG attachment download |
+
+**Submission validation:** Complete student profile; active document type; delivery method offered by that type; purpose 5–1000 characters; required date today or later on the local host calendar; zero-to-three PDF/JPEG/PNG files at 5 MiB or less each, with at least one file if the type requires supporting evidence. Use `request` as an `application/json` multipart part. Upload files as parts all named `files`.
+
+**Successful submission:** Returns 201 with `RequestDetailResponse` (including `id`, `requestNumber`, `version`, immutable catalogue snapshot, student summary, attachments, initial history and available actions); the request starts at `SUBMITTED`. A student confirmation and one notification per active STAFF user are stored in the same transaction; optional email is sent after commit. Files receive UUID storage names and protected request-relative paths in the database, but their paths are never included in responses. A failed transaction triggers best-effort cleanup of newly staged/finalized bytes. There is no student edit/cancel endpoint.
+
+**Postman manual smoke (not a UI test):**
+
+1. Sign in as a STUDENT using `POST http://localhost:8080/api/auth/login`, save the returned JWT, and finish `PUT /api/student/profile` if it is incomplete.
+2. Obtain an active document-type ID from `GET /api/document-types` using the same Bearer token. Check its available delivery methods and `supportingDocumentsRequired` flag.
+3. In Postman, create `POST http://localhost:8080/api/student/requests`. Choose **Body → form-data**. Add key `request` as a text JSON part with media type `application/json`, containing e.g. `{"documentTypeId":1,"purpose":"Required for university administration.","requiredDate":"2026-10-20","deliveryMethod":"ELECTRONIC"}` (adjust the ID/date/method); add up to three keys named `files` of type **File**. Postman must send a proper `application/json` content type for the JSON part. Do not manually set the multipart boundary.
+4. Verify HTTP 201, `UDR-` request number, `SUBMITTED`, the initial history entry and attachment metadata (no private paths). Repeat with an optional-attachment type and a required-attachment type.
+5. Use the created ID with `GET /api/student/requests` and `GET /api/student/requests/{id}`. Verify filters/page/sort, and download one returned attachment using `GET /api/student/requests/{id}/attachments/{attachmentId}` with the same Bearer token.
+6. Test a second STUDENT: the first student's request detail and attachment must return 404. Anonymous returns 401; STAFF/ADMIN returns 403. Invalid fields/files must fail without creating a request. Student PUT/PATCH/DELETE endpoints are intentionally absent.
+7. Use the notifications endpoint to verify a student confirmation and an active-staff notification. Leave `UNIDOC_EMAIL_ENABLED=false` for normal local testing; if true, emails are best effort and occur after commit.
+
+Run the Issue 11 focused suite and full backend regression on Windows:
+
+```powershell
+.\backend\mvnw.cmd -f backend\pom.xml "-Dtest=RequestTransitionValidatorTests,DocumentRequestServiceTests,StudentRequestHttpTests,RequestStorageCompensationTests,RequestRollbackIntegrationTests" test
+.\backend\mvnw.cmd -f backend\pom.xml clean test
+.\backend\mvnw.cmd -f backend\pom.xml clean package
+npm --prefix frontend run lint
+npm --prefix frontend run build
+```
+
+**Scope boundary:** Issue 11 adds the **backend**, not the form/list/detail React screens. Those are Issue 12. The RESPOND action and staff/issued-document delivery mutations are represented in the state machine but their HTTP commands belong to Issues 13–16.

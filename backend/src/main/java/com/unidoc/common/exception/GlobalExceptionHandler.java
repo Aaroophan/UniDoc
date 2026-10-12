@@ -21,6 +21,8 @@ import com.unidoc.request.DeliveryMethodMismatchException;
 import com.unidoc.request.DocumentNotReadyException;
 import com.unidoc.request.DocumentRequestNotFoundException;
 import com.unidoc.request.InvalidRequestTransitionException;
+import com.unidoc.request.InvalidDeliveryMethodException;
+import com.unidoc.request.InvalidRequiredDateException;
 import com.unidoc.request.IssuedDocumentAlreadyExistsException;
 import com.unidoc.request.IssuedDocumentNotFoundException;
 import com.unidoc.request.RequestVersionConflictException;
@@ -235,6 +237,22 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return expected(HttpStatus.BAD_REQUEST, ApiErrorCode.PROFILE_INCOMPLETE, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidDeliveryMethodException.class)
+    ResponseEntity<ApiErrorResponse> handleInvalidDeliveryMethod(
+            InvalidDeliveryMethodException exception, HttpServletRequest request
+    ) {
+        return expected(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_DELIVERY_METHOD, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidRequiredDateException.class)
+    ResponseEntity<ApiErrorResponse> handleInvalidRequiredDate(
+            InvalidRequiredDateException exception, HttpServletRequest request
+    ) {
+        return expected(HttpStatus.BAD_REQUEST, ApiErrorCode.VALIDATION_ERROR,
+                "Request validation failed.", request,
+                Map.of("requiredDate", exception.getMessage()));
     }
 
     @ExceptionHandler(DocumentRequestNotFoundException.class)

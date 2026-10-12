@@ -142,8 +142,11 @@ public class DocumentRequest extends AuditableEntity {
         this.deliveryMethod = Objects.requireNonNull(deliveryMethod);
         this.purpose = Objects.requireNonNull(purpose).trim();
         this.requiredDate = Objects.requireNonNull(requiredDate);
-        this.collectionLocationSnapshot = documentType.getCollectionLocation();
-        this.collectionInstructionsSnapshot = documentType.getCollectionInstructions();
+        // Preserve the submitted-time collection guidance only for PHYSICAL delivery.
+        if (deliveryMethod == DeliveryMethod.PHYSICAL) {
+            this.collectionLocationSnapshot = documentType.getCollectionLocation();
+            this.collectionInstructionsSnapshot = documentType.getCollectionInstructions();
+        }
     }
 
     public void assignRequestNumber() {
