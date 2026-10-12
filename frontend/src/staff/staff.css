@@ -25,3 +25,9 @@
 
 .staff-issued-upload { margin-top: 1.2rem; width: 100%; max-width: 37rem; border-top: 1px solid #e8dfe3; padding-top: 1.2rem; }
 .staff-issued-upload .request-inline-error { margin-top: .5rem; }
+
+/* Physical collection confirmation is content-first and remains scrollable in a small dialog. */
+.staff-physical-actions { margin-top: 1.2rem; max-width: 37rem; width: 100%; border-top: 1px solid #e8dfe3; padding-top: 1.2rem; }
+.staff-collection-summary { border: 1px solid #e8dfe3; padding: 1rem; border-radius: .5rem; background: #faf8f9; }
+.staff-collection-summary dd, .staff-collection-form dd { overflow-wrap: anywhere; }
+.staff-collection-form .form-control { max-width: 100%; }

@@ -11,8 +11,9 @@ import { formatFileSize, formatRequestDate, formatRequestTime } from '../request
 import type { StudentRequestAttachment, StudentRequestAction } from '../requests/requestsApi'
 import { validateReviewText } from '../requests/reviewValidation'
 import { parsePositiveId } from '../requests/requestsApi'
-import { getStaffRequest, saveStaffAttachment, saveStaffIssuedDocument, uploadIssuedDocument, startStaffReview, requestStaffInformation, approveStaffRequest, rejectStaffRequest, startStaffProcessing } from './staffRequestsApi'
+import { getStaffRequest, saveStaffAttachment, saveStaffIssuedDocument, uploadIssuedDocument, startStaffReview, requestStaffInformation, approveStaffRequest, rejectStaffRequest, startStaffProcessing, markReadyForCollection, completePhysicalCollection } from './staffRequestsApi'
 import { StaffIssuedDocumentUpload } from './StaffIssuedDocumentUpload'
+import { StaffPhysicalCollectionActions } from './StaffPhysicalCollectionActions'
 import type { StaffRequestDetail } from './staffRequestsApi'
 import { useStaffRequestAction } from './useStaffRequestAction'
 import './staff.css'
@@ -26,9 +27,6 @@ const REVIEW_ACTIONS: readonly ReviewAction[] = ['START_REVIEW', 'REQUEST_INFORM
 const ACTION_LABELS: Record<ReviewAction, string> = {
   START_REVIEW: 'Start review', REQUEST_INFORMATION: 'Request information', APPROVE: 'Approve',
   REJECT: 'Reject', START_PROCESSING: 'Start processing',
-}
-const PLANNED_ACTION_LABELS: Record<string, string> = {
-  READY_FOR_COLLECTION: 'Ready for collection', COMPLETE_COLLECTION: 'Complete collection',
 }
 const DIALOG_DESCRIPTIONS: Record<ReviewAction, string> = {
   START_REVIEW: 'Move this submitted request into review? A permanent history entry will be recorded.',
@@ -194,13 +192,13 @@ function StaffRequestDetail({ id }: { id: number | null }) {
           submitting={busyAction !== null} needsRefresh={needsRefresh}
           onUpload={(file) => run('UPLOAD_ISSUED_DOCUMENT', details.version,
             (requestId, version) => uploadIssuedDocument(requestId, version, file))} />}
-        {details.availableActions.some((action) => action === 'READY_FOR_COLLECTION' || action === 'COMPLETE_COLLECTION') && <div className="staff-future-actions">
-          <p className="small text-muted mb-2">Physical delivery actions will be implemented in Issue 16.</p>
-          <div className="d-flex flex-wrap gap-2">
-            {details.availableActions.filter((action) => action === 'READY_FOR_COLLECTION' || action === 'COMPLETE_COLLECTION').map((action) =>
-              <span className="staff-planned-action" key={action}>{PLANNED_ACTION_LABELS[action]}</span>)}
-          </div>
-        </div>}
+        {details.deliveryMethod === 'PHYSICAL' && details.availableActions.some((action) => action === 'READY_FOR_COLLECTION' || action === 'COMPLETE_COLLECTION') &&
+          <StaffPhysicalCollectionActions details={details} busy={busyAction !== null} needsRefresh={needsRefresh}
+            fieldErrors={fieldErrors} alert={alert} onOpen={clearAlert}
+            onReady={() => run('READY_FOR_COLLECTION', details.version,
+              (requestId, version) => markReadyForCollection(requestId, version))}
+            onComplete={(date, note) => run('COMPLETE_COLLECTION', details.version,
+              (requestId, version) => completePhysicalCollection(requestId, version, date, note))} />}
       </section>
       <div className="request-detail-layout">
         <div className="request-detail-primary">

@@ -185,6 +185,18 @@ public class DocumentRequest extends AuditableEntity {
         completedAt = Objects.requireNonNull(when);
     }
 
+    /** A physical request becomes collectable without changing its submission snapshots. */
+    public void markPhysicalReady(Instant when) {
+        readyAt = Objects.requireNonNull(when);
+    }
+
+    /** Record the actual collection date and optional plain-text note; completion is terminal. */
+    public void recordPhysicalCollection(LocalDate date, String note, Instant when) {
+        collectionDate = Objects.requireNonNull(date);
+        collectionNote = note;
+        completedAt = Objects.requireNonNull(when);
+    }
+
     public Long getId() {
         return id;
     }

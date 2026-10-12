@@ -40,6 +40,12 @@ final class RequestReviewTransitions {
         if (expectedVersion < 0 || request.getVersion() != expectedVersion) {
             throw new RequestVersionConflictException();
         }
+        // Physical commands must fail explicitly with DELIVERY_METHOD_MISMATCH even when
+        // called directly against electronic requests whose buttons are hidden in the UI.
+        if ((action == RequestAction.READY_FOR_COLLECTION || action == RequestAction.COMPLETE_COLLECTION)
+                && request.getDeliveryMethod() != DeliveryMethod.PHYSICAL) {
+            throw new DeliveryMethodMismatchException();
+        }
         RequestStatus next = switch (action) {
             case START_REVIEW -> RequestStatus.UNDER_REVIEW;
             case REQUEST_INFORMATION -> RequestStatus.ADDITIONAL_INFORMATION_REQUIRED;
@@ -47,6 +53,8 @@ final class RequestReviewTransitions {
             case APPROVE -> RequestStatus.APPROVED;
             case REJECT -> RequestStatus.REJECTED;
             case START_PROCESSING -> RequestStatus.PROCESSING;
+            case READY_FOR_COLLECTION -> RequestStatus.READY;
+            case COMPLETE_COLLECTION -> RequestStatus.COMPLETED;
             default -> throw new InvalidRequestTransitionException();
         };
         RequestStatus previous = request.getStatus();

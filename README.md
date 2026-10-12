@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements Issues 1–15 of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student requests and tracking, staff review and additional-information cycles, and **Issue 15 electronic issued-PDF delivery and completion on first authorized student download**. Physical collection completion, administrator reporting, deterministic demo data and release completion belong to later issues.
+UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements Issues 1–16 of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student requests and tracking, staff review and additional-information cycles, and **Issue 15 electronic issued-PDF delivery** plus **Issue 16 physical ready-for-collection and staff-recorded completion**. Administrator reporting, deterministic demo data and release completion belong to later issues.
 
 
 ## Prerequisites
@@ -352,7 +352,7 @@ All **ACTIVE STAFF** accounts share one work list at `/staff/requests`. Staff ca
 
 The work-list API defaults to `createdAt desc`, page 0, size 20 (frontend uses size 10), with allowed sort keys `createdAt`, `updatedAt`, `requiredDate`, `status`, and `requestNumber`. Size must be 1–100; `q` at most 120 characters; documentTypeId positive; `submittedFrom` must not be after `submittedTo`. Invalid filters receive 400 `INVALID_PARAMETER`. Unknown request is 404 `REQUEST_NOT_FOUND`, unknown or request-mismatched attachment is 404 `ATTACHMENT_NOT_FOUND`. STUDENT and ADMIN receive 403; unauthenticated requests receive 401. Inactive accounts cannot access staff endpoints.
 
-Start Review is the **only** workflow mutation introduced in Issue 13. It requires a freshly fetched `version` in `expectedVersion`, compares it before modifying the request, checks the current role/status/delivery action and the allowed state edge, and relies on the existing JPA `@Version` check to protect concurrent database transactions. Successful review updates the status to UNDER_REVIEW and appends a single `Review started.` history event with the staff actor in the same transaction; no notification/email is created for this transition. Explicit or database-level stale writes map to 409 `REQUEST_VERSION_CONFLICT`; an unsupported transition maps to 409 `INVALID_REQUEST_TRANSITION`. The frontend shows the conflict, reloads, and **never retries a mutation automatically**. An unconfirmed network result is treated as unknown; refresh and inspect the latest status/history before choosing another action. If the recovery fetch fails, the frontend blocks further mutation until a subsequent explicit refresh succeeds. Issue 14 enables the four review commands; Issue 15 now implements issued-PDF delivery and verification, while physical delivery actions remain for Issue 16.
+Start Review is the **only** workflow mutation introduced in Issue 13. It requires a freshly fetched `version` in `expectedVersion`, compares it before modifying the request, checks the current role/status/delivery action and the allowed state edge, and relies on the existing JPA `@Version` check to protect concurrent database transactions. Successful review updates the status to UNDER_REVIEW and appends a single `Review started.` history event with the staff actor in the same transaction; no notification/email is created for this transition. Explicit or database-level stale writes map to 409 `REQUEST_VERSION_CONFLICT`; an unsupported transition maps to 409 `INVALID_REQUEST_TRANSITION`. The frontend shows the conflict, reloads, and **never retries a mutation automatically**. An unconfirmed network result is treated as unknown; refresh and inspect the latest status/history before choosing another action. If the recovery fetch fails, the frontend blocks further mutation until a subsequent explicit refresh succeeds. Issue 14 enables the four review commands; Issue 15 implements issued-PDF delivery and verification; Issue 16 implements physical readiness and collection completion.
 
 Staff downloads require authentication for every request and never serve files from static storage. The browser saves protected blobs with safe response filenames and revokes temporary object URLs. The student download path was refactored to use the same common browser save helper, retaining owner-specific endpoint authorization. Four previous React hook warnings were addressed by stable pagination callbacks, derived invalid-route states, and a keyed student request form.
 
@@ -405,7 +405,7 @@ The upload validates filename extension, declared `application/pdf` type, `%PDF-
 
 Student download reads the complete authorized PDF **before** recording any completion or counter change; the database transaction commits before the controller returns the response. A missing/corrupt file never completes a request. The first download creates one `REQUEST_COMPLETED` notification/history entry, saves `completedAt`, `firstDownloadedAt`, `lastDownloadedAt`, and increments `downloadCount`. Subsequent downloads use a database-atomic counter update to prevent lost increments. Staff verification neither increments counters nor completes requests. Download responses have `application/pdf`, a sanitized attachment filename, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, and `Pragma: no-cache`.
 
-The staff detail now has an irreversible-upload confirmation and a staff verification download button. Student detail shows **Download document** in READY/COMPLETED; after an authenticated blob download it reloads authoritative details and notification count. A 409 stale version or unconfirmed upload outcome never causes automatic resubmission. Only physical collection commands are still shown as future actions.
+The staff detail now has an irreversible-upload confirmation and a staff verification download button. Student detail shows **Download document** in READY/COMPLETED; after an authenticated blob download it reloads authoritative details and notification count. A 409 stale version or unconfirmed upload outcome never causes automatic resubmission. Physical collection commands are implemented in Issue 16 and appear as usable staff controls only for eligible physical requests.
 
 ### Issue 15 verification on Windows (PowerShell)
 
@@ -424,3 +424,35 @@ npm run build
 For manual testing, create an electronic request as a student, use staff Start Review → Approve → Start Processing, upload one valid PDF as staff and check READY and the student's ready notification. Verify staff downloading the PDF does **not** complete it. Download once as the owning student and confirm COMPLETED/first timestamp/count 1/history/notification. Download again and confirm count 2 without a second completion entry. Test missing/oversized/forged PDFs, a second upload, stale expectedVersion, another student, and ADMIN/unauthenticated access. Check browser layouts at 360, 768 and 1366 pixels. See `docs/issue-15-implementation-checklist.md` for the complete matrix.
 
 **Execution environment:** Java 21 production source compilation, TypeScript compilation, and all 31 Node frontend tests passed. The Linux sandbox has no Maven test-scoped artifacts, and the archive's Node modules contain Windows-native lint/bundler dependencies, so the full JUnit suite, lint, Vite production bundling, local MySQL, email and interactive browser UAT must run on Windows. These checks are not claimed as passed here.
+
+
+## Issue 16 - Physical ready-for-collection and collection completion
+
+Physical delivery uses the existing request snapshots and closed state/action graph. Only **ACTIVE STAFF** may act; unlike electronic issuance it creates no issued PDF/file or issued-document row.
+
+| Endpoint | Body | Transition |
+| --- | --- | --- |
+| `POST /api/staff/requests/{id}/ready-for-collection` | `{ "expectedVersion": 4 }` | PHYSICAL PROCESSING → READY |
+| `POST /api/staff/requests/{id}/complete-collection` | `{ "collectionDate": "2026-10-12", "note": "ID verified.", "expectedVersion": 5 }` | PHYSICAL READY → COMPLETED |
+
+Both commands enforce fresh `expectedVersion`, active STAFF role, delivery method, and current action, with JPA `@Version` protecting concurrent transactions. Stale versions return 409 `REQUEST_VERSION_CONFLICT`; invalid states return 409 `INVALID_REQUEST_TRANSITION`; electronic delivery returns 409 `DELIVERY_METHOD_MISMATCH`. Missing date, a future date, and a note longer than 1000 trimmed characters return 400 `VALIDATION_ERROR` with field-specific messages. Date uses the same laptop-local calendar as required-date validation; a blank note becomes null.
+
+Mark Ready saves `readyAt`, a history entry, and a `PHYSICAL_DOCUMENT_READY` notification. Complete Collection saves `collectionDate`, nullable `collectionNote`, `completedAt`, terminal COMPLETED status, history, and `REQUEST_COMPLETED` notification. Updates commit atomically. Optional plain-text emails are sent after commit; they include neither personal files nor collection notes. Staff and student details use **submission-time collection snapshots**, even after a catalogue edit. Student instructions are shown when READY or COMPLETED; the student never marks a physical request complete or downloads an issued PDF.
+
+Staff detail has a snapshot-verification confirmation and dated record-collection form with local-today maximum, optional note, busy/error states and version-safe refresh. Unknown or conflicting outcomes never trigger automatic resubmission.
+
+### Issue 16 verification (Windows)
+
+```powershell
+cd C:\ASV\Projects\UniDoc\backend
+.\mvnw.cmd -f pom.xml '-Dtest=PhysicalCollectionServiceTests,PhysicalCollectionHttpTests,PhysicalCollectionRollbackTests,RequestTransitionValidatorTests,ReviewWorkflowServiceTests,ElectronicDocumentServiceTests' test
+.\mvnw.cmd clean test
+.\mvnw.cmd clean package
+cd ..\frontend
+npm ci
+npm run test:requests
+npm run lint
+npm run build
+```
+
+See `docs/issue-16-implementation-checklist.md` for the full acceptance matrix. Java 21 production compilation, strict TypeScript compilation and 34 frontend tests passed in the execution environment. Maven/JUnit, native lint/Vite bundling, MySQL/SMTP and interactive browser checks are pending Windows validation.

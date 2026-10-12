@@ -29,7 +29,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,12 +54,13 @@ public class StaffRequestService {
     private final RequestTransitionValidator transitions;
     private final RequestReviewTransitions reviewTransitions;
     private final Validator validator;
+    private final Clock clock;
 
     public StaffRequestService(UserRepository users, DocumentRequestRepository requests,
                                StudentProfileRepository profiles, RequestAttachmentRepository attachments,
                                RequestStatusHistoryRepository histories, IssuedDocumentRepository issuedDocuments,
                                FileStorageService storage, RequestTransitionValidator transitions,
-                               RequestReviewTransitions reviewTransitions, Validator validator) {
+                               RequestReviewTransitions reviewTransitions, Validator validator, Clock clock) {
         this.users = users;
         this.requests = requests;
         this.profiles = profiles;
@@ -67,6 +71,7 @@ public class StaffRequestService {
         this.transitions = transitions;
         this.reviewTransitions = reviewTransitions;
         this.validator = validator;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -147,6 +152,31 @@ public class StaffRequestService {
         return execute(staffUserId, requestId, expectedVersion, RequestAction.START_PROCESSING,
                 "Processing started.", ignored -> {}, NotificationType.PROCESSING_STARTED,
                 "Processing started", "Your approved document request is now being processed.");
+    }
+
+    @Transactional
+    public StaffRequestDetailResponse readyForCollection(long staffUserId, long requestId, long expectedVersion) {
+        return execute(staffUserId, requestId, expectedVersion, RequestAction.READY_FOR_COLLECTION,
+                "Physical document ready for collection.", request -> request.markPhysicalReady(Instant.now(clock)),
+                NotificationType.PHYSICAL_DOCUMENT_READY, "Physical document ready for collection",
+                "Your physical document is ready for collection. View your request for the collection location and instructions.");
+    }
+
+    @Transactional
+    public StaffRequestDetailResponse completeCollection(long staffUserId, long requestId,
+                                                         CompleteCollectionRequest command) {
+        validate(command);
+        String note = command.note() == null || command.note().isBlank() ? null : command.note().strip();
+        return execute(staffUserId, requestId, command.expectedVersion(), RequestAction.COMPLETE_COLLECTION,
+                note == null ? "Physical document collected." : note,
+                request -> {
+                    // Match request submission's laptop-local business-date convention.
+                    if (command.collectionDate().isAfter(LocalDate.now(clock.withZone(ZoneId.systemDefault())))) {
+                        throw new InvalidCollectionDateException();
+                    }
+                    request.recordPhysicalCollection(command.collectionDate(), note, Instant.now(clock));
+                }, NotificationType.REQUEST_COMPLETED, "Document request completed",
+                "Your physical document collection has been recorded and your request is completed.");
     }
 
     /** Called only from public transactional use cases above. */

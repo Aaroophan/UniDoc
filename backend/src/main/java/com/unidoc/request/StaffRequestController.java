@@ -88,6 +88,18 @@ public class StaffRequestController {
         return service.startProcessing(currentUser.currentUserId(), requestId, request.expectedVersion());
     }
 
+    @PostMapping("/{requestId}/ready-for-collection")
+    public StaffRequestDetailResponse readyForCollection(@PathVariable long requestId,
+                                                          @Valid @RequestBody StartReviewRequest request) {
+        return service.readyForCollection(currentUser.currentUserId(), requestId, request.expectedVersion());
+    }
+
+    @PostMapping("/{requestId}/complete-collection")
+    public StaffRequestDetailResponse completeCollection(@PathVariable long requestId,
+                                                          @Valid @RequestBody CompleteCollectionRequest request) {
+        return service.completeCollection(currentUser.currentUserId(), requestId, request);
+    }
+
     @PostMapping(value = "/{requestId}/issued-document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public StaffRequestDetailResponse uploadIssuedDocument(@PathVariable long requestId,
             @RequestParam(required = false) Long expectedVersion,

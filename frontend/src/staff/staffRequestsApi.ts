@@ -120,6 +120,20 @@ export async function startStaffProcessing(id: number, expectedVersion: number):
     { expectedVersion: checkedVersion(expectedVersion) })).data
 }
 
+/** PHYSICAL PROCESSING -> READY; the server retains the submitted-time collection snapshots. */
+export async function markReadyForCollection(id: number, expectedVersion: number): Promise<StaffRequestDetail> {
+  return (await apiClient.post<StaffRequestDetail>(`${STAFF_PATH}/${requirePositiveId(id)}/ready-for-collection`,
+    { expectedVersion: checkedVersion(expectedVersion) })).data
+}
+
+/** PHYSICAL READY -> COMPLETED; date is yyyy-MM-dd in the laptop's local calendar. */
+export async function completePhysicalCollection(
+  id: number, expectedVersion: number, collectionDate: string, note: string,
+): Promise<StaffRequestDetail> {
+  return (await apiClient.post<StaffRequestDetail>(`${STAFF_PATH}/${requirePositiveId(id)}/complete-collection`,
+    { expectedVersion: checkedVersion(expectedVersion), collectionDate, note: note.trim() || null })).data
+}
+
 /** Exactly one PDF and a text version part; browser owns the multipart boundary. */
 export async function uploadIssuedDocument(id: number, expectedVersion: number, file: File): Promise<StaffRequestDetail> {
   if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0) throw new Error('Invalid request version.')

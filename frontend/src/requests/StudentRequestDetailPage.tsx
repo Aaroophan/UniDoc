@@ -173,12 +173,13 @@ export function StudentRequestDetailPage() {
                   {details.status === 'READY' || details.status === 'COMPLETED' ? (
                     <p className="request-callout-intro">Your document {details.status === 'COMPLETED' ? 'was recorded as collected' : 'can be collected'} at the location below.</p>
                   ) : <p className="request-callout-intro">Collection will be available once staff mark the document as ready.</p>}
-                  <dl className="request-collection-facts">
-                    <div><dt>Location</dt><dd className="request-wrap">{details.collectionLocation || 'Not specified'}</dd></div>
-                    {details.collectionInstructions && <div><dt>Instructions</dt><dd className="request-wrap">{details.collectionInstructions}</dd></div>}
+                  {(details.status === 'READY' || details.status === 'COMPLETED') && <dl className="request-collection-facts">
+                    <div><dt>Location (at submission)</dt><dd className="request-wrap">{details.collectionLocation || 'Location unavailable — contact the university.'}</dd></div>
+                    <div><dt>Instructions (at submission)</dt><dd className="request-wrap">{details.collectionInstructions || 'No additional instructions were recorded.'}</dd></div>
+                    {details.readyAt && <div><dt>Ready since</dt><dd>{formatRequestTime(details.readyAt)}</dd></div>}
                     {details.collectionDate && <div><dt>Collection date</dt><dd>{formatRequestDate(details.collectionDate)}</dd></div>}
                     {details.collectionNote && <div><dt>Collection note</dt><dd className="request-wrap">{details.collectionNote}</dd></div>}
-                  </dl>
+                  </dl>}
                 </section>
               )}
               {details.deliveryMethod === 'ELECTRONIC' && (

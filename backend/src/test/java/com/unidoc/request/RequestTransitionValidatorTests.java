@@ -96,6 +96,45 @@ class RequestTransitionValidatorTests {
                 UserRole.STUDENT, RequestStatus.UNDER_REVIEW, DeliveryMethod.ELECTRONIC))
                 .isInstanceOf(InvalidRequestTransitionException.class);
     }
+    @Test
+    void everyRoleStatusMethodActionCombinationIsClosedAndExplicit() {
+        for (UserRole role : UserRole.values()) {
+            for (DeliveryMethod method : DeliveryMethod.values()) {
+                for (RequestStatus status : RequestStatus.values()) {
+                    for (RequestAction action : RequestAction.values()) {
+                        boolean permitted = switch (role) {
+                            case ADMIN -> false;
+                            case STUDENT -> (action == RequestAction.RESPOND
+                                    && status == RequestStatus.ADDITIONAL_INFORMATION_REQUIRED)
+                                    || (action == RequestAction.DOWNLOAD_ISSUED_DOCUMENT
+                                    && method == DeliveryMethod.ELECTRONIC
+                                    && (status == RequestStatus.READY || status == RequestStatus.COMPLETED));
+                            case STAFF -> switch (action) {
+                                case START_REVIEW -> status == RequestStatus.SUBMITTED;
+                                case REQUEST_INFORMATION, APPROVE, REJECT -> status == RequestStatus.UNDER_REVIEW;
+                                case START_PROCESSING -> status == RequestStatus.APPROVED;
+                                case UPLOAD_ISSUED_DOCUMENT -> method == DeliveryMethod.ELECTRONIC && status == RequestStatus.PROCESSING;
+                                case READY_FOR_COLLECTION -> method == DeliveryMethod.PHYSICAL && status == RequestStatus.PROCESSING;
+                                case COMPLETE_COLLECTION -> method == DeliveryMethod.PHYSICAL && status == RequestStatus.READY;
+                                case DOWNLOAD_ISSUED_DOCUMENT -> method == DeliveryMethod.ELECTRONIC
+                                        && (status == RequestStatus.READY || status == RequestStatus.COMPLETED);
+                                case RESPOND -> false;
+                            };
+                        };
+                        assertThat(rules.canPerform(action, role, status, method)).isEqualTo(permitted);
+                        assertThat(rules.availableActions(role, status, method).contains(action)).isEqualTo(permitted);
+                        if (permitted) {
+                            rules.requireAction(action, role, status, method);
+                        } else {
+                            assertThatThrownBy(() -> rules.requireAction(action, role, status, method))
+                                    .isInstanceOf(InvalidRequestTransitionException.class);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @ParameterizedTest
     @EnumSource(RequestStatus.class)
     void everyStaffStateAndDeliveryPairHasExactlyTheDocumentedActionSet(RequestStatus status) {

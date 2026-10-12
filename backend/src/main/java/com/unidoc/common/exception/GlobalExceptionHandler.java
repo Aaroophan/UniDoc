@@ -23,6 +23,7 @@ import com.unidoc.request.DocumentRequestNotFoundException;
 import com.unidoc.request.InvalidRequestTransitionException;
 import com.unidoc.request.InvalidDeliveryMethodException;
 import com.unidoc.request.InvalidRequiredDateException;
+import com.unidoc.request.InvalidCollectionDateException;
 import com.unidoc.request.IssuedDocumentAlreadyExistsException;
 import com.unidoc.request.IssuedDocumentNotFoundException;
 import com.unidoc.request.RequestVersionConflictException;
@@ -253,6 +254,15 @@ public class GlobalExceptionHandler {
         return expected(HttpStatus.BAD_REQUEST, ApiErrorCode.VALIDATION_ERROR,
                 "Request validation failed.", request,
                 Map.of("requiredDate", exception.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidCollectionDateException.class)
+    ResponseEntity<ApiErrorResponse> handleInvalidCollectionDate(
+            InvalidCollectionDateException exception, HttpServletRequest request
+    ) {
+        return expected(HttpStatus.BAD_REQUEST, ApiErrorCode.VALIDATION_ERROR,
+                "Request validation failed.", request,
+                Map.of("collectionDate", exception.getMessage()));
     }
 
     @ExceptionHandler(DocumentRequestNotFoundException.class)
