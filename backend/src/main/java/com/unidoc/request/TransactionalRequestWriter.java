@@ -40,13 +40,15 @@ public class TransactionalRequestWriter {
     private final NotificationService notifications;
     private final FileStorageService storage;
     private final RequestTransitionValidator transitions;
+    private final RequestReviewTransitions reviewTransitions;
     private final Clock clock;
 
     public TransactionalRequestWriter(UserRepository users, StudentProfileService studentProfiles,
                                       StudentProfileRepository profileRecords, DocumentTypeRepository types,
                                       DocumentRequestRepository requests, RequestAttachmentRepository attachments,
                                       RequestStatusHistoryRepository history, NotificationService notifications,
-                                      FileStorageService storage, RequestTransitionValidator transitions, Clock clock) {
+                                      FileStorageService storage, RequestTransitionValidator transitions,
+                                      RequestReviewTransitions reviewTransitions, Clock clock) {
         this.users = users;
         this.studentProfiles = studentProfiles;
         this.profileRecords = profileRecords;
@@ -57,6 +59,7 @@ public class TransactionalRequestWriter {
         this.notifications = notifications;
         this.storage = storage;
         this.transitions = transitions;
+        this.reviewTransitions = reviewTransitions;
         this.clock = clock;
     }
 
@@ -118,4 +121,56 @@ public class TransactionalRequestWriter {
                 .map(profile -> profile.getRegistrationNumber()).orElse(null);
         return DocumentRequestService.toDetail(request, registration, savedFiles, List.of(initial), null, transitions);
     }
+    /** Called through the Spring proxy: commit finishes before the outer storage coordinator returns. */
+    @Transactional
+    public StudentRequestDetailResponse submitInformationResponse(long studentUserId, long requestId,
+                                                                   InformationResponseRequest command,
+                                                                   FileStorageService.StorageOperation files) {
+        User student = users.findById(studentUserId).orElseThrow(SessionRevokedException::new);
+        if (student.getRole() != UserRole.STUDENT) {
+            throw new AccessDeniedException("Only students can answer an information request.");
+        }
+        if (student.getStatus() != UserStatus.ACTIVE) throw new InactiveAccountException();
+        if (requestId < 1) throw new DocumentRequestNotFoundException();
+        DocumentRequest request = requests.findByIdAndStudentId(requestId, studentUserId)
+                .orElseThrow(DocumentRequestNotFoundException::new);
+        long version = command.expectedVersion() == null ? request.getVersion() : command.expectedVersion();
+        if (request.getVersion() != version) throw new RequestVersionConflictException();
+        transitions.requireAction(RequestAction.RESPOND, student.getRole(), request.getStatus(), request.getDeliveryMethod());
+
+        List<RequestAttachment> newFiles = new ArrayList<>();
+        if (files != null) {
+            for (StoredFile stored : storage.finalizeFiles(files, request.getId())) {
+                newFiles.add(attachments.saveAndFlush(new RequestAttachment(request, student,
+                        AttachmentKind.ADDITIONAL_INFORMATION, stored.originalFilename(),
+                        stored.storedFilename(), stored.relativePath(), stored.contentType(), stored.sizeBytes())));
+            }
+        }
+        String number = request.getRequestNumber();
+        String note = command.message().strip();
+        List<NotificationCommand> notices = new ArrayList<>();
+        notices.add(new NotificationCommand(studentUserId, NotificationType.ADDITIONAL_INFORMATION_SUBMITTED,
+                "Information response submitted", "Your response for document request " + number + " was submitted.",
+                "/requests/" + requestId));
+        int page = 0;
+        Page<User> staff;
+        do {
+            staff = users.findByRoleAndStatus(UserRole.STAFF, UserStatus.ACTIVE,
+                    PageRequest.of(page++, 100, Sort.by(Sort.Direction.ASC, "id")));
+            for (User recipient : staff.getContent()) {
+                notices.add(new NotificationCommand(recipient.getId(),
+                        NotificationType.ADDITIONAL_INFORMATION_SUBMITTED,
+                        "Additional information submitted", "Document request " + number + " is ready for review again.",
+                        "/staff/requests/" + requestId));
+            }
+        } while (staff.hasNext());
+        reviewTransitions.record(request, student, version, RequestAction.RESPOND, note,
+                DocumentRequest::clearAdditionalInformation, notices);
+        List<RequestAttachment> allFiles = attachments.findByRequestIdOrderByCreatedAtAscIdAsc(requestId);
+        List<RequestStatusHistory> events = history.findByRequestIdOrderByCreatedAtAscIdAsc(requestId);
+        String registration = profileRecords.findByUserId(studentUserId)
+                .map(profile -> profile.getRegistrationNumber()).orElse(null);
+        return DocumentRequestService.toDetail(request, registration, allFiles, events, null, transitions);
+    }
+
 }

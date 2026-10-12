@@ -8,20 +8,34 @@ import { PageHeader } from '../components/PageHeader'
 import { PageState } from '../components/PageState'
 import { RequestStatus as RequestStatusBadge } from '../components/RequestStatus'
 import { formatFileSize, formatRequestDate, formatRequestTime } from '../requests/requestFormat'
-import type { StudentRequestAttachment } from '../requests/requestsApi'
+import type { StudentRequestAttachment, StudentRequestAction } from '../requests/requestsApi'
+import { validateReviewText } from '../requests/reviewValidation'
 import { parsePositiveId } from '../requests/requestsApi'
-import { getStaffRequest, saveStaffAttachment, startStaffReview } from './staffRequestsApi'
+import { getStaffRequest, saveStaffAttachment, startStaffReview, requestStaffInformation, approveStaffRequest, rejectStaffRequest, startStaffProcessing } from './staffRequestsApi'
 import type { StaffRequestDetail } from './staffRequestsApi'
 import { useStaffRequestAction } from './useStaffRequestAction'
 import './staff.css'
 
 type LoadState = 'loading' | 'error' | 'not-found' | 'ready'
 
-const FUTURE_ACTION_LABELS: Record<string, string> = {
-  REQUEST_INFORMATION: 'Request information',
-  APPROVE: 'Approve', REJECT: 'Reject', START_PROCESSING: 'Start processing',
+type ReviewAction = Extract<StudentRequestAction,
+  'START_REVIEW' | 'REQUEST_INFORMATION' | 'APPROVE' | 'REJECT' | 'START_PROCESSING'>
+
+const REVIEW_ACTIONS: readonly ReviewAction[] = ['START_REVIEW', 'REQUEST_INFORMATION', 'APPROVE', 'REJECT', 'START_PROCESSING']
+const ACTION_LABELS: Record<ReviewAction, string> = {
+  START_REVIEW: 'Start review', REQUEST_INFORMATION: 'Request information', APPROVE: 'Approve',
+  REJECT: 'Reject', START_PROCESSING: 'Start processing',
+}
+const PLANNED_ACTION_LABELS: Record<string, string> = {
   UPLOAD_ISSUED_DOCUMENT: 'Upload issued PDF', READY_FOR_COLLECTION: 'Ready for collection',
   COMPLETE_COLLECTION: 'Complete collection', DOWNLOAD_ISSUED_DOCUMENT: 'Verify issued PDF',
+}
+const DIALOG_DESCRIPTIONS: Record<ReviewAction, string> = {
+  START_REVIEW: 'Move this submitted request into review? A permanent history entry will be recorded.',
+  REQUEST_INFORMATION: 'Ask the student for specific missing information. The question will be visible in their request and its history.',
+  APPROVE: 'Approve the request? The student will be notified. Processing does not begin automatically.',
+  REJECT: 'Reject this request permanently? The student will see your reason. Rejected requests cannot be reopened.',
+  START_PROCESSING: 'Start processing this approved request? The student will be notified.',
 }
 
 function StaffRequestDetail({ id }: { id: number | null }) {
@@ -34,11 +48,13 @@ function StaffRequestDetail({ id }: { id: number | null }) {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [loadError, setLoadError] = useState<{ message: string; requestId?: string | null } | null>(null)
   const [reload, setReload] = useState(0)
-  const [showReviewConfirm, setShowReviewConfirm] = useState(false)
+  const [dialogAction, setDialogAction] = useState<ReviewAction | null>(null)
+  const [decisionText, setDecisionText] = useState('')
+  const [decisionError, setDecisionError] = useState<string | null>(null)
   const [busyFiles, setBusyFiles] = useState<number[]>([])
   const [downloadErrors, setDownloadErrors] = useState<Record<number, string>>({})
   const downloadLocks = useRef(new Set<number>())
-  const { run, busyAction, alert, needsRefresh, acknowledgeFreshDetail, clearAlert } = useStaffRequestAction(id, setDetails)
+  const { run, busyAction, alert, fieldErrors, needsRefresh, acknowledgeFreshDetail, clearAlert } = useStaffRequestAction(id, setDetails)
 
   useEffect(() => {
     if (id === null) return
@@ -68,10 +84,37 @@ function StaffRequestDetail({ id }: { id: number | null }) {
     return () => controller.abort()
   }, [id, reload, acknowledgeFreshDetail])
 
-  async function confirmStartReview() {
-    if (!details || !details.availableActions.includes('START_REVIEW')) return
-    await run('START_REVIEW', details.version, startStaffReview)
-    setShowReviewConfirm(false) // The refetched state may invalidate the originally offered action.
+  function openDecision(action: ReviewAction) {
+    if (!details || !details.availableActions.includes(action) || needsRefresh || busyAction !== null) return
+    clearAlert()
+    setDecisionText('')
+    setDecisionError(null)
+    setDialogAction(action)
+  }
+
+  async function confirmDecision() {
+    if (!details || !dialogAction || !details.availableActions.includes(dialogAction)) return
+    const action = dialogAction
+    const text = decisionText.trim()
+    if (action === 'REQUEST_INFORMATION' || action === 'REJECT') {
+      const invalid = validateReviewText(text, action === 'REJECT' ? 'rejection' : 'information-request')
+      if (invalid) { setDecisionError(invalid); return }
+    }
+    setDecisionError(null)
+    const command = (requestId: number, version: number) => {
+      switch (action) {
+        case 'START_REVIEW': return startStaffReview(requestId, version)
+        case 'REQUEST_INFORMATION': return requestStaffInformation(requestId, version, text)
+        case 'APPROVE': return approveStaffRequest(requestId, version)
+        case 'REJECT': return rejectStaffRequest(requestId, version, text)
+        case 'START_PROCESSING': return startStaffProcessing(requestId, version)
+      }
+    }
+    const succeeded = await run(action, details.version, command)
+    if (succeeded) {
+      setDialogAction(null)
+      setDecisionText('')
+    }
   }
 
   async function download(attachment: StudentRequestAttachment) {
@@ -122,15 +165,18 @@ function StaffRequestDetail({ id }: { id: number | null }) {
         <h2 className="h5 mb-2" id="staff-actions-heading">Staff actions</h2>
         {needsRefresh && <p role="status" className="request-inline-error">Refresh the request successfully before attempting any further action.</p>}
         {details.availableActions.length === 0 && <p className="request-callout-intro mb-0">No further actions are available for this request.</p>}
-        {details.availableActions.includes('START_REVIEW') && <div className="d-flex align-items-center gap-3 flex-wrap">
-          <button type="button" className="btn btn-primary" disabled={busyAction !== null || needsRefresh} onClick={() => setShowReviewConfirm(true)}>Start review</button>
-          <p className="small text-muted mb-0">Moves a submitted request into review and records your action in history.</p>
-        </div>}
-        {details.availableActions.some((action) => action !== 'START_REVIEW') && <div className="staff-future-actions">
-          <p className="small text-muted mb-2">The backend permits the following next steps. Their controls will be enabled in the relevant upcoming phase.</p>
+        <div className="d-flex align-items-center gap-3 flex-wrap">
+          {REVIEW_ACTIONS.filter((action) => details.availableActions.includes(action)).map((action) =>
+            <button type="button" key={action}
+              className={`btn ${action === 'REJECT' ? 'btn-outline-danger' : action === 'REQUEST_INFORMATION' ? 'btn-outline-primary' : 'btn-primary'}`}
+              disabled={busyAction !== null || needsRefresh}
+              onClick={() => openDecision(action)}>{ACTION_LABELS[action]}</button>)}
+        </div>
+        {details.availableActions.some((action) => !REVIEW_ACTIONS.includes(action as ReviewAction)) && <div className="staff-future-actions">
+          <p className="small text-muted mb-2">The following delivery actions become available in the next implementation phase.</p>
           <div className="d-flex flex-wrap gap-2">
-            {details.availableActions.filter((action) => action !== 'START_REVIEW').map((action) =>
-              <span className="staff-planned-action" key={action}>{FUTURE_ACTION_LABELS[action] || action}</span>)}
+            {details.availableActions.filter((action) => !REVIEW_ACTIONS.includes(action as ReviewAction)).map((action) =>
+              <span className="staff-planned-action" key={action}>{PLANNED_ACTION_LABELS[action] || action}</span>)}
           </div>
         </div>}
       </section>
@@ -217,10 +263,33 @@ function StaffRequestDetail({ id }: { id: number | null }) {
           </section>
         </div>
       </div>
-      <ConfirmDialog open={showReviewConfirm} title="Start reviewing this request?"
-        description={`Move ${details.requestNumber} from Submitted to Under review? This creates a permanent status-history entry.`}
-        confirmLabel="Start review" busy={busyAction !== null} disabledConfirm={needsRefresh}
-        onCancel={() => setShowReviewConfirm(false)} onConfirm={() => void confirmStartReview()} />
+      <ConfirmDialog open={dialogAction !== null}
+        title={dialogAction ? `${ACTION_LABELS[dialogAction]} — ${details.requestNumber}` : 'Staff decision'}
+        description={dialogAction ? DIALOG_DESCRIPTIONS[dialogAction] : ''}
+        confirmLabel={dialogAction ? ACTION_LABELS[dialogAction] : 'Confirm'}
+        destructive={dialogAction === 'REJECT'} busy={busyAction !== null}
+        disabledConfirm={needsRefresh || (dialogAction !== null && !details.availableActions.includes(dialogAction))}
+        onCancel={() => { setDialogAction(null); setDecisionError(null) }}
+        onConfirm={() => void confirmDecision()}>
+        {(dialogAction === 'REQUEST_INFORMATION' || dialogAction === 'REJECT') && <div className="mb-3">
+          <label className="form-label fw-semibold" htmlFor="staff-decision-text">
+            {dialogAction === 'REJECT' ? 'Reason for rejection' : 'What information is needed?'} <span aria-hidden="true">*</span>
+          </label>
+          <textarea id="staff-decision-text" className={`form-control ${decisionError || fieldErrors[dialogAction === 'REJECT' ? 'reason' : 'message'] ? 'is-invalid' : ''}`}
+            rows={5} minLength={5} maxLength={2000} value={decisionText}
+            aria-required="true" aria-invalid={Boolean(decisionError || fieldErrors[dialogAction === 'REJECT' ? 'reason' : 'message'])}
+            aria-describedby="staff-decision-guidance staff-decision-error"
+            disabled={busyAction !== null}
+            onChange={(event) => { setDecisionText(event.target.value); setDecisionError(null) }} />
+          <p id="staff-decision-guidance" className="small text-muted mt-1 mb-1">5–2000 characters. Saved as plain text in request history.</p>
+          {(decisionError || fieldErrors[dialogAction === 'REJECT' ? 'reason' : 'message']) &&
+            <p id="staff-decision-error" role="alert" className="request-inline-error">
+              {decisionError || fieldErrors[dialogAction === 'REJECT' ? 'reason' : 'message']}</p>}
+        </div>}
+        {alert && <div className="mb-2"><FeedbackBanner variant={alert.variant} message={alert.message} requestId={alert.requestId} /></div>}
+        {dialogAction && !details.availableActions.includes(dialogAction) &&
+          <p role="alert" className="request-inline-error">This action is no longer available. Close this dialog and review the latest status.</p>}
+      </ConfirmDialog>
     </>}
   </>
 }

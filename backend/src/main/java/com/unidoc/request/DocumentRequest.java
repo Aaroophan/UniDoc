@@ -158,6 +158,19 @@ public class DocumentRequest extends AuditableEntity {
         }
     }
 
+    /** Current staff question; previous questions remain in append-only history. */
+    public void requestAdditionalInformation(String message) {
+        additionalInformationMessage = Objects.requireNonNull(message).strip();
+    }
+
+    public void clearAdditionalInformation() {
+        additionalInformationMessage = null;
+    }
+
+    public void reject(String reason) {
+        rejectionReason = Objects.requireNonNull(reason).strip();
+    }
+
     public void updateStatus(RequestStatus newStatus) {
         status = Objects.requireNonNull(newStatus);
     }

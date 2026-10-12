@@ -57,6 +57,31 @@ public class StaffRequestController {
         return service.startReview(currentUser.currentUserId(), requestId, request.expectedVersion());
     }
 
+
+    @PostMapping("/{requestId}/request-information")
+    public StaffRequestDetailResponse requestInformation(@PathVariable long requestId,
+                                                          @Valid @RequestBody RequestInformationRequest request) {
+        return service.requestInformation(currentUser.currentUserId(), requestId, request);
+    }
+
+    @PostMapping("/{requestId}/approve")
+    public StaffRequestDetailResponse approve(@PathVariable long requestId,
+                                               @Valid @RequestBody StartReviewRequest request) {
+        return service.approve(currentUser.currentUserId(), requestId, request.expectedVersion());
+    }
+
+    @PostMapping("/{requestId}/reject")
+    public StaffRequestDetailResponse reject(@PathVariable long requestId,
+                                              @Valid @RequestBody RejectRequest request) {
+        return service.reject(currentUser.currentUserId(), requestId, request);
+    }
+
+    @PostMapping("/{requestId}/start-processing")
+    public StaffRequestDetailResponse startProcessing(@PathVariable long requestId,
+                                                       @Valid @RequestBody StartReviewRequest request) {
+        return service.startProcessing(currentUser.currentUserId(), requestId, request.expectedVersion());
+    }
+
     @GetMapping("/{requestId}/attachments/{attachmentId}")
     public ResponseEntity<byte[]> download(@PathVariable long requestId, @PathVariable long attachmentId) {
         PreparedAttachmentDownload prepared = service.downloadAttachment(

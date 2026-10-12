@@ -7,6 +7,8 @@ import { PageHeader } from '../components/PageHeader'
 import { PageState } from '../components/PageState'
 import { RequestStatus } from '../components/RequestStatus'
 import { formatFileSize, formatRequestDate, formatRequestTime, statusExplanation } from './requestFormat'
+import { StudentInformationResponseForm } from './StudentInformationResponseForm'
+import type { ResponseNotice } from './StudentInformationResponseForm'
 import { getStudentRequest, parsePositiveId, saveStudentAttachment } from './requestsApi'
 import type { StudentRequestDetail, StudentRequestAttachment } from './requestsApi'
 import './requests.css'
@@ -34,6 +36,7 @@ export function StudentRequestDetailPage() {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [details, setDetails] = useState<StudentRequestDetail | null>(null)
   const [loadError, setLoadError] = useState<{ message: string; requestId?: string | null } | null>(null)
+  const [responseNotice, setResponseNotice] = useState<ResponseNotice | null>(null)
   const [reload, setReload] = useState(0)
   const [pendingFiles, setPendingFiles] = useState<number[]>([])
   const [downloadErrors, setDownloadErrors] = useState<Record<number, string>>({})
@@ -92,6 +95,7 @@ export function StudentRequestDetailPage() {
           <Link className="btn btn-outline-secondary" to="/requests">Back to My requests</Link>
           {visibleLoadState === 'ready' && <button type="button" className="btn btn-outline-primary" onClick={() => setReload((current) => current + 1)}>Refresh</button>}
         </div>} />
+      {responseNotice && visibleLoadState === 'ready' && <div className="mb-4"><FeedbackBanner variant={responseNotice.variant} message={responseNotice.message} requestId={responseNotice.requestId} onDismiss={() => setResponseNotice(null)} /></div>}
       {submittedNotice && visibleLoadState === 'ready' && <div className="mb-4"><FeedbackBanner variant="success" message="Your request was submitted successfully. Keep the request number for tracking." /></div>}
       {visibleLoadState === 'loading' && <PageState status="loading" message="Loading request details..." />}
       {visibleLoadState === 'error' && <PageState status="error" title="Unable to load request"
@@ -114,13 +118,16 @@ export function StudentRequestDetailPage() {
               <div className="request-attention-notice" role="status">
                 <strong>Message from the university</strong>
                 <p className="request-wrap mt-2 mb-0">{details.additionalInformationMessage}</p>
-                {details.availableActions.includes('RESPOND') && <p className="small mt-2 mb-0">Online responses to staff information requests are not enabled yet. Please contact the university for guidance.</p>}
+
               </div>
             )}
             {details.status === 'REJECTED' && details.rejectionReason && (
               <div className="request-rejected-notice"><strong>Reason for rejection</strong><p className="request-wrap mt-2 mb-0">{details.rejectionReason}</p></div>
             )}
           </section>
+          {details.status === 'ADDITIONAL_INFORMATION_REQUIRED' && details.availableActions.includes('RESPOND') &&
+            <div className="mb-4"><StudentInformationResponseForm key={details.id} details={details}
+              onUpdate={(updated, notice) => { setDetails(updated); setResponseNotice(notice) }} /></div>}
           <div className="request-detail-layout">
             <div className="request-detail-primary">
               <section className="surface-card request-detail-section" aria-labelledby="request-detail-overview-title">

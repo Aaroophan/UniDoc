@@ -150,6 +150,23 @@ export async function getStudentRequest(id: number, signal?: AbortSignal): Promi
   return (await apiClient.get<StudentRequestDetail>(`${REQUESTS_PATH}/${requirePositiveId(id)}`, { signal })).data
 }
 
+export interface StudentInformationResponse {
+  message: string
+  expectedVersion?: number
+}
+
+/** Optional response files are validated again by the backend (MIME and signature). */
+export async function submitStudentInformationResponse(
+  requestId: number, command: StudentInformationResponse, files: readonly File[],
+): Promise<StudentRequestDetail> {
+  const form = new FormData()
+  form.append('response', new Blob([JSON.stringify(command)], { type: 'application/json' }))
+  for (const file of files) form.append('files', file, file.name)
+  return (await apiClient.post<StudentRequestDetail>(
+    `${REQUESTS_PATH}/${requirePositiveId(requestId)}/information-response`, form, { timeout: 60000 },
+  )).data
+}
+
 /**
  * The only browser download path: owner-scoped API -> authenticated Blob -> save -> revoke.
  * The page never sees private paths, public file URLs, or object-URL lifecycle details.

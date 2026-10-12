@@ -13,6 +13,7 @@ type Command = (requestId: number, version: number) => Promise<StaffRequestDetai
 export function useStaffRequestAction(requestId: number | null, setDetails: Dispatch<SetStateAction<StaffRequestDetail | null>>) {
   const [busyAction, setBusyAction] = useState<StudentRequestAction | null>(null)
   const [alert, setAlert] = useState<Alert | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const acknowledgeFreshDetail = useCallback(() => setNeedsRefresh(false), [])
   const executionLock = useRef(false)
@@ -35,6 +36,7 @@ export function useStaffRequestAction(requestId: number | null, setDetails: Disp
     executionLock.current = true
     setBusyAction(action)
     setAlert(null)
+    setFieldErrors({})
     try {
       const updated = await command(requestId, currentVersion)
       setDetails(updated)
@@ -43,6 +45,7 @@ export function useStaffRequestAction(requestId: number | null, setDetails: Disp
       return true
     } catch (failure: unknown) {
       const api = getApiError(failure)
+      setFieldErrors(api?.fieldErrors ?? {})
       if (api?.code === 'REQUEST_VERSION_CONFLICT' || api?.code === 'INVALID_REQUEST_TRANSITION') {
         const refreshed = await reloadAfterUnconfirmed()
         setAlert({ variant: 'warning',
@@ -66,5 +69,5 @@ export function useStaffRequestAction(requestId: number | null, setDetails: Disp
     }
   }
 
-  return { run, busyAction, alert, needsRefresh, acknowledgeFreshDetail, clearAlert: () => setAlert(null) }
+  return { run, busyAction, alert, fieldErrors, needsRefresh, acknowledgeFreshDetail, clearAlert: () => { setAlert(null); setFieldErrors({}) } }
 }

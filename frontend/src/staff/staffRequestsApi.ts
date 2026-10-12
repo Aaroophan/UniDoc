@@ -95,6 +95,31 @@ export async function startStaffReview(id: number, expectedVersion: number): Pro
     { expectedVersion })).data
 }
 
+function checkedVersion(version: number): number {
+  if (!Number.isSafeInteger(version) || version < 0) throw new Error('Invalid request version.')
+  return version
+}
+
+export async function requestStaffInformation(id: number, expectedVersion: number, message: string): Promise<StaffRequestDetail> {
+  return (await apiClient.post<StaffRequestDetail>(`${STAFF_PATH}/${requirePositiveId(id)}/request-information`,
+    { expectedVersion: checkedVersion(expectedVersion), message })).data
+}
+
+export async function approveStaffRequest(id: number, expectedVersion: number): Promise<StaffRequestDetail> {
+  return (await apiClient.post<StaffRequestDetail>(`${STAFF_PATH}/${requirePositiveId(id)}/approve`,
+    { expectedVersion: checkedVersion(expectedVersion) })).data
+}
+
+export async function rejectStaffRequest(id: number, expectedVersion: number, reason: string): Promise<StaffRequestDetail> {
+  return (await apiClient.post<StaffRequestDetail>(`${STAFF_PATH}/${requirePositiveId(id)}/reject`,
+    { expectedVersion: checkedVersion(expectedVersion), reason })).data
+}
+
+export async function startStaffProcessing(id: number, expectedVersion: number): Promise<StaffRequestDetail> {
+  return (await apiClient.post<StaffRequestDetail>(`${STAFF_PATH}/${requirePositiveId(id)}/start-processing`,
+    { expectedVersion: checkedVersion(expectedVersion) })).data
+}
+
 export async function saveStaffAttachment(requestId: number, attachment: StudentRequestAttachment): Promise<void> {
   await saveAuthenticatedDownload(`${STAFF_PATH}/${requirePositiveId(requestId)}/attachments/${requirePositiveId(attachment.id)}`,
     attachment.originalFilename || 'supporting-document')

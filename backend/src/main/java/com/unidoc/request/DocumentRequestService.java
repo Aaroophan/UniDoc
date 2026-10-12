@@ -113,6 +113,38 @@ public class DocumentRequestService {
         return created;
     }
 
+    /**
+     * Validate before staging, then let the proxied writer commit all relational changes.
+     * Cleanup covers failures within the transaction and failures raised at commit time.
+     */
+    public StudentRequestDetailResponse submitInformationResponse(long studentUserId, long requestId,
+                                                                  InformationResponseRequest command,
+                                                                  List<MultipartFile> suppliedFiles) {
+        Objects.requireNonNull(command, "Information response is required.");
+        Set<ConstraintViolation<InformationResponseRequest>> violations = validator.validate(command);
+        if (!violations.isEmpty()) throw new ConstraintViolationException(violations);
+        requireActiveStudent(studentUserId);
+        DocumentRequest existing = ownRequest(studentUserId, requestId);
+        if (command.expectedVersion() != null && command.expectedVersion() != existing.getVersion()) {
+            throw new RequestVersionConflictException();
+        }
+        transitions.requireAction(RequestAction.RESPOND, UserRole.STUDENT,
+                existing.getStatus(), existing.getDeliveryMethod());
+        List<ValidatedUpload> checked = storage.validateSupportingFiles(suppliedFiles, false);
+        FileStorageService.StorageOperation operation = checked.isEmpty() ? null
+                : storage.stage(checked, StorageCategory.ADDITIONAL_INFORMATION);
+        try {
+            StudentRequestDetailResponse updated = writer.submitInformationResponse(studentUserId, requestId,
+                    command, operation);
+            log.info("Information response submitted requestId={} studentUserId={} attachmentCount={} version={}",
+                    requestId, studentUserId, checked.size(), updated.version());
+            return updated;
+        } catch (RuntimeException | Error failure) {
+            if (operation != null) storage.cleanup(operation);
+            throw failure;
+        }
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<StudentRequestSummary> list(long studentUserId, String rawStatus,
                                                     String rawDeliveryMethod, Integer page, Integer size,

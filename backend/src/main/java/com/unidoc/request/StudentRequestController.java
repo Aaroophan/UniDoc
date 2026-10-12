@@ -52,6 +52,15 @@ public class StudentRequestController {
         return service.list(currentUser.currentUserId(), status, deliveryMethod, page, size, sort, direction);
     }
 
+    @PostMapping(value = "/{requestId}/information-response", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public StudentRequestDetailResponse submitInformationResponse(
+            @PathVariable long requestId,
+            @Valid @RequestPart("response") InformationResponseRequest response,
+            @RequestPart(name = "files", required = false) List<MultipartFile> files
+    ) {
+        return service.submitInformationResponse(currentUser.currentUserId(), requestId, response, files);
+    }
+
     @GetMapping("/{requestId}")
     public StudentRequestDetailResponse detail(@PathVariable long requestId) {
         return service.getDetail(currentUser.currentUserId(), requestId);

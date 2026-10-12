@@ -9,6 +9,11 @@ import com.unidoc.common.web.QueryParameters;
 import com.unidoc.file.AttachmentNotFoundException;
 import com.unidoc.file.FileStorageService;
 import com.unidoc.file.PreparedFileDownload;
+import com.unidoc.notification.NotificationCommand;
+import com.unidoc.notification.NotificationType;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
 import com.unidoc.profile.StudentProfile;
 import com.unidoc.profile.StudentProfileRepository;
 import com.unidoc.user.User;
@@ -28,9 +33,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-/** Shared staff work list, read-only detail and first workflow command. */
+/** Shared staff work list, detail and explicit, versioned review commands. */
 @Service
 public class StaffRequestService {
     private static final Logger log = LoggerFactory.getLogger(StaffRequestService.class);
@@ -43,11 +49,14 @@ public class StaffRequestService {
     private final IssuedDocumentRepository issuedDocuments;
     private final FileStorageService storage;
     private final RequestTransitionValidator transitions;
+    private final RequestReviewTransitions reviewTransitions;
+    private final Validator validator;
 
     public StaffRequestService(UserRepository users, DocumentRequestRepository requests,
                                StudentProfileRepository profiles, RequestAttachmentRepository attachments,
                                RequestStatusHistoryRepository histories, IssuedDocumentRepository issuedDocuments,
-                               FileStorageService storage, RequestTransitionValidator transitions) {
+                               FileStorageService storage, RequestTransitionValidator transitions,
+                               RequestReviewTransitions reviewTransitions, Validator validator) {
         this.users = users;
         this.requests = requests;
         this.profiles = profiles;
@@ -56,6 +65,8 @@ public class StaffRequestService {
         this.issuedDocuments = issuedDocuments;
         this.storage = storage;
         this.transitions = transitions;
+        this.reviewTransitions = reviewTransitions;
+        this.validator = validator;
     }
 
     @Transactional(readOnly = true)
@@ -100,25 +111,64 @@ public class StaffRequestService {
 
     @Transactional
     public StaffRequestDetailResponse startReview(long staffUserId, long requestId, long expectedVersion) {
+        return execute(staffUserId, requestId, expectedVersion, RequestAction.START_REVIEW,
+                "Review started.", ignored -> {}, null, null, null);
+    }
+
+    @Transactional
+    public StaffRequestDetailResponse requestInformation(long staffUserId, long requestId,
+                                                         RequestInformationRequest command) {
+        validate(command);
+        String message = command.message().strip();
+        return execute(staffUserId, requestId, command.expectedVersion(), RequestAction.REQUEST_INFORMATION,
+                message, request -> request.requestAdditionalInformation(message),
+                NotificationType.ADDITIONAL_INFORMATION_REQUIRED, "Additional information required",
+                "Staff need more information to review your document request.");
+    }
+
+    @Transactional
+    public StaffRequestDetailResponse approve(long staffUserId, long requestId, long expectedVersion) {
+        return execute(staffUserId, requestId, expectedVersion, RequestAction.APPROVE,
+                "Request approved.", ignored -> {}, NotificationType.REQUEST_APPROVED,
+                "Request approved", "Your document request has been approved.");
+    }
+
+    @Transactional
+    public StaffRequestDetailResponse reject(long staffUserId, long requestId, RejectRequest command) {
+        validate(command);
+        String reason = command.reason().strip();
+        return execute(staffUserId, requestId, command.expectedVersion(), RequestAction.REJECT,
+                reason, request -> request.reject(reason), NotificationType.REQUEST_REJECTED,
+                "Request rejected", "Your document request was rejected. View the reason in UniDoc.");
+    }
+
+    @Transactional
+    public StaffRequestDetailResponse startProcessing(long staffUserId, long requestId, long expectedVersion) {
+        return execute(staffUserId, requestId, expectedVersion, RequestAction.START_PROCESSING,
+                "Processing started.", ignored -> {}, NotificationType.PROCESSING_STARTED,
+                "Processing started", "Your approved document request is now being processed.");
+    }
+
+    /** Called only from public transactional use cases above. */
+    private StaffRequestDetailResponse execute(long staffUserId, long requestId, long expectedVersion,
+                                               RequestAction action, String note, Consumer<DocumentRequest> changes,
+                                               NotificationType notificationType, String title, String message) {
         User actor = requireActiveStaff(staffUserId);
         DocumentRequest request = requireRequest(requestId);
-        if (expectedVersion < 0 || request.getVersion() != expectedVersion) {
-            throw new RequestVersionConflictException();
-        }
-        transitions.requireAction(RequestAction.START_REVIEW, actor.getRole(),
-                request.getStatus(), request.getDeliveryMethod());
-        transitions.requireTransition(request.getStatus(), RequestStatus.UNDER_REVIEW, request.getDeliveryMethod());
-        RequestStatus previous = request.getStatus();
-        request.updateStatus(RequestStatus.UNDER_REVIEW);
-        // Force a version-checked SQL update before appending a single history entry.
-        requests.saveAndFlush(request);
-        histories.saveAndFlush(new RequestStatusHistory(
-                request, previous, RequestStatus.UNDER_REVIEW, actor, "Review started."));
-        StaffRequestDetailResponse result = assembleDetail(request);
-        log.info("Staff review started requestId={} staffUserId={} version={}",
-                requestId, staffUserId, result.version());
-        // Deliberately no notification for the entry into review.
-        return result;
+        List<NotificationCommand> notices = notificationType == null ? List.of() : List.of(
+                new NotificationCommand(request.getStudent().getId(), notificationType,
+                        title, message + " Reference: " + request.getRequestNumber(),
+                        "/requests/" + requestId));
+        reviewTransitions.record(request, actor, expectedVersion, action, note, changes, notices);
+        StaffRequestDetailResponse detail = assembleDetail(request);
+        log.info("Staff request action completed requestId={} staffUserId={} action={} version={}",
+                requestId, staffUserId, action, detail.version());
+        return detail;
+    }
+
+    private <T> void validate(T command) {
+        Set<ConstraintViolation<T>> violations = validator.validate(java.util.Objects.requireNonNull(command));
+        if (!violations.isEmpty()) throw new ConstraintViolationException(violations);
     }
 
     @Transactional(readOnly = true)
