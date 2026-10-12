@@ -1,3 +1,4 @@
+import { filenameFromDisposition } from './downloadNames'
 import axios, { AxiosHeaders } from 'axios'
 import { getApiError } from './errors'
 import { endSession, getStoredSession } from '../auth/session'
@@ -53,30 +54,11 @@ export interface BinaryResponse {
   contentType: string
 }
 
-function safeFilename(value: string): string {
-  const invalidCharacters = ['\\', '/', '"', '<', '>', ':', '|', '?', '*']
-  const safe = Array.from(value, (character) => {
-    const code = character.codePointAt(0) ?? 0
-    return code < 32 || code === 127 || invalidCharacters.includes(character) ? '_' : character
-  }).join('').trim().slice(0, 160)
-  return safe || 'download'
-}
-
-/** For later protected downloads. Do not construct public filesystem URLs. */
+/** Protected browser downloads. Do not construct public filesystem URLs. */
 export async function getBinaryResource(path: string, fallbackName = 'download'): Promise<BinaryResponse> {
   const response = await apiClient.get<Blob>(path, { responseType: 'blob' })
   const disposition = response.headers['content-disposition']
-  let filename = safeFilename(fallbackName)
-  if (typeof disposition === 'string') {
-    const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)
-    const quoted = disposition.match(/filename="([^"]*)"/i)
-    const plain = disposition.match(/filename=([^;]+)/i)
-    try {
-      if (encoded) filename = safeFilename(decodeURIComponent(encoded[1]))
-      else if (quoted) filename = safeFilename(quoted[1])
-      else if (plain) filename = safeFilename(plain[1].trim())
-    } catch { /* Use safe fallback if the server filename cannot be decoded. */ }
-  }
+  const filename = filenameFromDisposition(typeof disposition === 'string' ? disposition : undefined, fallbackName)
   return {
     blob: response.data,
     filename,

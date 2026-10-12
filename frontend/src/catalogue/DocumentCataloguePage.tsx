@@ -88,7 +88,7 @@ export function DocumentCataloguePage() {
               </article>
             ))}
           </div>
-          {user?.role === 'STUDENT' && <p className="small text-muted mt-4">A complete academic profile is required before submitting a document request. The submission form is scheduled for Issue 12.</p>}
+          {user?.role === 'STUDENT' && <p className="small text-muted mt-4">A complete academic profile is required before submitting a document request. You can select an available document above to continue to the request form.</p>}
         </>
       )}
     </>

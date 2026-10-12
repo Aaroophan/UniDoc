@@ -13,8 +13,9 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { PlannedFeaturePage } from './pages/PlannedFeaturePage'
 import { NotificationsPage } from './notifications/NotificationsPage'
 import { ProfilePage } from './profile/ProfilePage'
-import { NewRequestProfileGate } from './profile/NewRequestProfileGate'
-import { StudentRequestsLanding } from './profile/StudentRequestsLanding'
+import { NewStudentRequestPage } from './requests/NewStudentRequestPage'
+import { MyRequestsPage } from './requests/MyRequestsPage'
+import { StudentRequestDetailPage } from './requests/StudentRequestDetailPage'
 import './styles.css'
 
 function App() {
@@ -38,9 +39,9 @@ function App() {
 
             <Route element={<RoleRoute allowedRoles={['STUDENT']} />}>
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/requests" element={<StudentRequestsLanding />} />
-              <Route path="/requests/new" element={<NewRequestProfileGate />} />
-              <Route path="/requests/:requestId" element={<PlannedFeaturePage eyebrow="Student workspace" title="Request details" description="Review your request's current status, history and attached documents." issue={12} />} />
+              <Route path="/requests" element={<MyRequestsPage />} />
+              <Route path="/requests/new" element={<NewStudentRequestPage />} />
+              <Route path="/requests/:requestId" element={<StudentRequestDetailPage />} />
             </Route>
 
             <Route element={<RoleRoute allowedRoles={['STAFF']} />}>

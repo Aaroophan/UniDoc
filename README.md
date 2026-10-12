@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system. This repository implements the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, Issue 6 student profile management, Issue 7 administrator account management, Issue 8 document catalogue, Issue 9 in-app notifications and best-effort email infrastructure, Issue 10 protected local file storage, and Issue 11 the student request submission/tracking backend. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Student request creation, owner-scoped lists/details, and attachment downloads are available through the backend API as of Issue 11. The student submission/tracking pages are implemented in Issue 12; staff workflow, delivery, reports, and deterministic demo data remain later issues.
+UniDoc is a local university document-request management system. This repository implements the Issue 1–4 backend foundation (persistence, shared API errors, registration/login and stateless JWT role security), the Issue 5 React application shell, Issue 6 student profile management, Issue 7 administrator account management, Issue 8 document catalogue, Issue 9 in-app notifications and best-effort email infrastructure, Issue 10 protected local file storage, Issue 11 the student request submission/tracking backend, and Issue 12 the student catalogue/submission/tracking interface. UniDoc runs locally using Java 21 Spring Boot, React TypeScript, MySQL, and protected local storage. Student request creation, owner-scoped lists/details, and attachment downloads are available through the backend API as of Issue 11. The student submission/tracking pages now use those authenticated endpoints; staff workflow, additional-information responses, issued-document download, reports, and deterministic demo data remain later issues.
 
 ## Prerequisites
 
@@ -139,7 +139,7 @@ After starting MySQL, the Spring Boot API, and Vite using the commands above, op
 - `/login`: students, staff, and administrators sign in using credentials stored in MySQL. Wrong passwords, inactive accounts, and validation failures show safe messages.
 - `/account`: the authenticated user can read public account data and sign out. The session belongs to this browser tab (`sessionStorage`), and a refresh triggers `/api/auth/me` verification.
 - `/dashboard`: redirects to the current role's entry page. All protected routes require authentication; STUDENT, STAFF, and ADMIN route families also have frontend role guards in addition to the backend's security checks.
-- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Document catalogue browsing and administrator document-type management are functional in Issue 8; student request submission/tracking **pages** and reports retain placeholders until their assigned issues; notifications are functional as of Issue 9. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
+- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Document catalogue browsing and administrator document-type management are functional in Issue 8; the student request submission/tracking pages are functional as of Issue 12, while staff workflow and reports retain placeholders; notifications are functional as of Issue 9. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
 
 The frontend API base URL is `VITE_API_BASE_URL` (defaults to `http://localhost:8080`). For a Windows setup, create `frontend/.env.local` with this public value as shown above. Never expose database/JWT/SMTP secrets through `VITE_` variables.
 
@@ -151,12 +151,12 @@ Authenticated STUDENT users can open `/profile` to view their own academic profi
 
 The GET response includes account full name and immutable email. If no profile exists, its academic fields and `updatedAt` are `null` and `complete` is `false`. PUT accepts full name, registration number, optional phone, faculty, department, degree programme and academic year (1–8). The service normalizes values, updates the account name and academic profile in one transaction, and returns the canonical saved profile. Duplicate registration numbers produce HTTP 409 `REGISTRATION_NUMBER_ALREADY_EXISTS`; field validation produces HTTP 400 `VALIDATION_ERROR`. A saved name change is reflected in the navigation/account view by refreshing `/api/auth/me`.
 
-The student `/requests` landing page highlights missing profile details, while `/requests/new` checks the authoritative saved profile and provides a `/profile` link when it is incomplete. The backend also exposes `StudentProfileService.requireCompleteForSubmission(currentUserId)` for Issue 11 request creation. The Issue 11 request creation endpoint now independently enforces profile completeness and returns 400 `PROFILE_INCOMPLETE` for an incomplete profile. The browser request submission/tracking pages are added in Issue 12.
+The student `/requests` page lists their requests, while `/requests/new?documentTypeId=<id>` checks the authoritative saved profile and provides a `/profile` link when it is incomplete. The backend also exposes `StudentProfileService.requireCompleteForSubmission(currentUserId)` for Issue 11 request creation. The Issue 11 request creation endpoint now independently enforces profile completeness and returns 400 `PROFILE_INCOMPLETE` for an incomplete profile. The browser request submission/tracking pages were completed in Issue 12.
 
 ### Manual Issue 6 verification
 
-1. Sign in as a newly registered student. Confirm the `/requests` landing page highlights missing profile details; then open `/profile` and check the empty academic form, read-only email and profile-incomplete explanation.
-2. Open `/requests/new` directly and confirm it asks for profile completion rather than displaying the planned request submission form.
+1. Sign in as a newly registered student. Confirm `/requests` has a first-request empty state; then open `/profile` and check the empty academic form, read-only email and profile-incomplete explanation.
+2. Open `/catalogue`, select an active document type and follow its Request action. Confirm `/requests/new?documentTypeId=<id>` asks for profile completion before showing the submission form. Without a selected type, the page asks you to choose one first.
 3. Fill in all required fields, using a registration number unique to this student, and save. Confirm success, the saved data, and the updated full name on `/account`.
 4. Reload `/profile`; verify persisted values, `complete=true`, and the Edit profile action. Edit and save with an unchanged registration number, then try a different number and academic years 1 and 8.
 5. Test invalid/blank values, academic years 0 and 9, an unsupported registration character, and an invalid phone. Confirm field errors, preservation of input, and focus on an invalid field.
@@ -195,7 +195,7 @@ See `docs/issue-07-implementation-checklist.md` for feature boundaries and local
 
 ## Issue 8 document catalogue
 
-All authenticated users can now open `/catalogue` and see only **active** document types, sorted by name, including their supporting-document instructions, delivery methods and collection information when physical delivery is offered. STUDENT users can choose **Request this document**, which navigates to `/requests/new?documentTypeId=...`. The request submission API is Issue 11 and the complete request form is Issue 12; the current frontend continues to enforce profile completeness and displays the honest planned feature state.
+All authenticated users can now open `/catalogue` and see only **active** document types, sorted by name, including their supporting-document instructions, delivery methods and collection information when physical delivery is offered. STUDENT users can choose **Request this document**, which navigates to `/requests/new?documentTypeId=...`. The request submission API is Issue 11 and the complete Issue 12 frontend provides a live request form with authoritative profile and catalogue checks.
 
 An authenticated **ADMIN** opens `/admin/document-types` to create, edit, filter, paginate, activate and deactivate entries. Only admins can use the management APIs. There is no hard deletion. The first five proposal document types are created by the deterministic seed in **Issue 19**, so an empty catalogue before manual creation is expected.
 
@@ -308,4 +308,32 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-**Scope boundary:** Issue 11 adds the **backend**, not the form/list/detail React screens. Those are Issue 12. The RESPOND action and staff/issued-document delivery mutations are represented in the state machine but their HTTP commands belong to Issues 13–16.
+**Scope boundary:** Issue 11 added the backend; Issue 12 has now implemented the form/list/detail React screens. The RESPOND action and staff/issued-document delivery mutations are represented in the state machine but their HTTP commands belong to Issues 13–16.
+
+## Issue 12 - Student catalogue, submission, and tracking UI
+
+An authenticated **STUDENT** can browse `/catalogue`, choose **Request this document**, and continue to `/requests/new?documentTypeId=<id>`. The page retrieves the selected active type and the student's saved profile again from the API. It never relies on the query string or login state to prove an active document type or a complete profile. An unavailable type links back to the catalogue; an incomplete profile links to `/profile`. STAFF and ADMIN cannot enter student pages.
+
+The new request form shows the catalogue requirements, supporting-file condition, delivery options, and any physical collection instructions. It validates purpose (5-1000 characters), required date (today or later in local time), enabled delivery method and PDF/JPEG/PNG files (maximum three, maximum 5 MiB each). These are *usability checks*; the backend still validates content, signatures, storage, role, and ownership. Submission sends exactly one `request` application/json Blob and repeated `files` entries with a browser-generated multipart boundary. A successful HTTP 201 opens `/requests/{id}` with a success message and canonical UDR request number. While a submission is pending, a synchronous guard prevents double posts. If the connection fails without confirming whether the POST committed, the form pauses further submits and directs the student to check My requests before explicitly choosing to try again.
+
+`/requests` lists only the authenticated student's own requests, newest first, with status/delivery filters, a clear action, and server-side zero-based pagination (10 per page). Filters remain in the URL while paging and reset the page number when changed. The unfiltered empty state goes to the catalogue. `/requests/:requestId` displays catalogue-name snapshot, immutable request details, status explanation, delivery/collection information, additional-information and rejection notes, issued metadata if returned, supporting files, and backend-ordered status history. A missing or other student's ID produces the same not-found view. The frontend exposes no request edit or cancellation command.
+
+Attachment downloads use the **owner-scoped Bearer-authenticated** `/api/student/requests/{id}/attachments/{attachmentId}` endpoint and save a Blob with a sanitized response/metadata filename. The browser revokes the temporary Blob URL. Each row has independent pending and error states. No protected file path or public upload URL is exposed. The existing Spring Security CORS configuration exposes `Content-Disposition`; the existing file handler returns `nosniff` and private/no-store headers. Responding to staff information requests and downloading the issued final document are *not yet implemented* (Issues 14 and 15); the detail screen displays their state but does not create dead or unauthorized buttons.
+
+### Verification (Windows PowerShell, from repository root)
+
+```powershell
+.\backend\mvnw.cmd -f backend\pom.xml "-Dtest=RequestTransitionValidatorTests,DocumentRequestServiceTests,StudentRequestHttpTests,RequestStorageCompensationTests,RequestRollbackIntegrationTests" test
+.\backend\mvnw.cmd -f backend\pom.xml clean test
+.\backend\mvnw.cmd -f backend\pom.xml clean package
+npm --prefix frontend ci
+npm --prefix frontend run test:requests
+npm --prefix frontend run lint
+npm --prefix frontend run build
+```
+
+The new `test:requests` script runs pure TypeScript validation and download-filename tests via Node.js 22+ type stripping. The standard Vite/oxlint commands continue to run on Windows with npm's locally installed native binaries.
+
+For manual end-to-end verification, start MySQL, load the normal private `.env` into the shell, run the backend (`.\backend\mvnw.cmd -f backend\pom.xml spring-boot:run`) and run Vite (`npm --prefix frontend run dev`) in another shell. Sign in as a STUDENT, complete `/profile`, create an active document type as ADMIN if none exists, then perform both an optional-file electronic request and a required-file physical request (use a small **test** PDF/JPEG/PNG). Confirm the UDR number, owner-scoped list/detail/history, required and optional files, downloading the exact file, and refresh persistence. Use a second student login and an owned-by-another-student direct ID to verify identical 404 behavior. Check error/retry/empty states, invalid/past date, inactive catalogue type, file count/type/size, and duplicate-submission prevention. Repeat the screens at **360 px, 768 px and 1366 px** and with keyboard-only navigation. Do not use sensitive real student files for testing.
+
+See `docs/issue-12-implementation-checklist.md` for the full acceptance matrix and the remaining manual UAT steps. The eleven original architecture documents and Issue 11 request backend are unchanged.
