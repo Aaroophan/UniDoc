@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements Issues 1–14 of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student requests and tracking, staff work list and review entry, and **Issue 14 staff decisions plus the additional-information response cycle**. Electronic issued-document delivery, physical collection completion, administrator reporting, deterministic demo data and release completion belong to later issues.
+UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements Issues 1–15 of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student requests and tracking, staff review and additional-information cycles, and **Issue 15 electronic issued-PDF delivery and completion on first authorized student download**. Physical collection completion, administrator reporting, deterministic demo data and release completion belong to later issues.
 
 
 ## Prerequisites
@@ -352,7 +352,7 @@ All **ACTIVE STAFF** accounts share one work list at `/staff/requests`. Staff ca
 
 The work-list API defaults to `createdAt desc`, page 0, size 20 (frontend uses size 10), with allowed sort keys `createdAt`, `updatedAt`, `requiredDate`, `status`, and `requestNumber`. Size must be 1–100; `q` at most 120 characters; documentTypeId positive; `submittedFrom` must not be after `submittedTo`. Invalid filters receive 400 `INVALID_PARAMETER`. Unknown request is 404 `REQUEST_NOT_FOUND`, unknown or request-mismatched attachment is 404 `ATTACHMENT_NOT_FOUND`. STUDENT and ADMIN receive 403; unauthenticated requests receive 401. Inactive accounts cannot access staff endpoints.
 
-Start Review is the **only** workflow mutation introduced in Issue 13. It requires a freshly fetched `version` in `expectedVersion`, compares it before modifying the request, checks the current role/status/delivery action and the allowed state edge, and relies on the existing JPA `@Version` check to protect concurrent database transactions. Successful review updates the status to UNDER_REVIEW and appends a single `Review started.` history event with the staff actor in the same transaction; no notification/email is created for this transition. Explicit or database-level stale writes map to 409 `REQUEST_VERSION_CONFLICT`; an unsupported transition maps to 409 `INVALID_REQUEST_TRANSITION`. The frontend shows the conflict, reloads, and **never retries a mutation automatically**. An unconfirmed network result is treated as unknown; refresh and inspect the latest status/history before choosing another action. If the recovery fetch fails, the frontend blocks further mutation until a subsequent explicit refresh succeeds. Issue 14 now enables the four review commands; the remaining delivery-specific actions remain informational until Issues 15-16.
+Start Review is the **only** workflow mutation introduced in Issue 13. It requires a freshly fetched `version` in `expectedVersion`, compares it before modifying the request, checks the current role/status/delivery action and the allowed state edge, and relies on the existing JPA `@Version` check to protect concurrent database transactions. Successful review updates the status to UNDER_REVIEW and appends a single `Review started.` history event with the staff actor in the same transaction; no notification/email is created for this transition. Explicit or database-level stale writes map to 409 `REQUEST_VERSION_CONFLICT`; an unsupported transition maps to 409 `INVALID_REQUEST_TRANSITION`. The frontend shows the conflict, reloads, and **never retries a mutation automatically**. An unconfirmed network result is treated as unknown; refresh and inspect the latest status/history before choosing another action. If the recovery fetch fails, the frontend blocks further mutation until a subsequent explicit refresh succeeds. Issue 14 enables the four review commands; Issue 15 now implements issued-PDF delivery and verification, while physical delivery actions remain for Issue 16.
 
 Staff downloads require authentication for every request and never serve files from static storage. The browser saves protected blobs with safe response filenames and revokes temporary object URLs. The student download path was refactored to use the same common browser save helper, retaining owner-specific endpoint authorization. Four previous React hook warnings were addressed by stable pagination callbacks, derived invalid-route states, and a keyed student request form.
 
@@ -389,3 +389,38 @@ Staff message/rejection reason must contain 5-2000 characters after trimming; th
 Workflows maintain atomic SQL updates for status/history/notifications and best-effort compensating cleanup for new files if the transaction or commit fails. `REQUEST_VERSION_CONFLICT` and `INVALID_REQUEST_TRANSITION` return HTTP 409; neither client automatically resends an uncertain mutation. In-app notifications are authoritative; SMTP errors do not roll back successful actions.
 
 Run the Windows tests and manual scenarios documented in `docs/issue-14-implementation-checklist.md`, including both delivery methods, a repeated information cycle, valid/invalid PDF/JPEG/PNG, rejection as a terminal state, simultaneous staff decisions, and 360/768/1366-pixel screen checks. **Linux sandbox verification:** Java production source compilation, TypeScript compilation, and all 28 Node frontend tests passed; new backend JUnit tests, full Maven package, native oxlint/Vite and real MySQL/browser UAT still require execution on the Windows development laptop.
+
+
+## Issue 15 - Electronic issued-PDF delivery
+
+Electronic delivery is available only when an **ELECTRONIC** request has reached **PROCESSING** through the normal submission → review → approval → processing workflow. No direct status edits, file replacement, public URL, or administrator processing privilege exists.
+
+| Endpoint | Caller | Result |
+| --- | --- | --- |
+| `POST /api/staff/requests/{id}/issued-document` | Active STAFF | `multipart/form-data`: one required `file` (PDF, max 10 MiB) plus required text `expectedVersion`; response 200 staff detail, PROCESSING → READY |
+| `GET /api/staff/requests/{id}/issued-document` | Active STAFF | Private PDF verification with no workflow or student-counter changes |
+| `GET /api/student/requests/{id}/issued-document` | Owning STUDENT | Private PDF response; first download while READY atomically changes to COMPLETED and records the student actor; later downloads update count and last-download time only |
+
+The upload validates filename extension, declared `application/pdf` type, `%PDF-` signature and exact 10 MiB limit, rechecks version/role/delivery/status/uniqueness before moving a UUID-named file from `.tmp` to `requests/{id}/issued`, then commits metadata, READY status, timestamp, history and `ELECTRONIC_DOCUMENT_READY` in-app notification together. Optional email is plain text, after commit, with an internal frontend link; no PDF is emailed. Failed database commits trigger best-effort compensation only for the newly staged file.
+
+Student download reads the complete authorized PDF **before** recording any completion or counter change; the database transaction commits before the controller returns the response. A missing/corrupt file never completes a request. The first download creates one `REQUEST_COMPLETED` notification/history entry, saves `completedAt`, `firstDownloadedAt`, `lastDownloadedAt`, and increments `downloadCount`. Subsequent downloads use a database-atomic counter update to prevent lost increments. Staff verification neither increments counters nor completes requests. Download responses have `application/pdf`, a sanitized attachment filename, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, and `Pragma: no-cache`.
+
+The staff detail now has an irreversible-upload confirmation and a staff verification download button. Student detail shows **Download document** in READY/COMPLETED; after an authenticated blob download it reloads authoritative details and notification count. A 409 stale version or unconfirmed upload outcome never causes automatic resubmission. Only physical collection commands are still shown as future actions.
+
+### Issue 15 verification on Windows (PowerShell)
+
+```powershell
+cd C:\ASV\Projects\UniDoc\backend
+.\mvnw.cmd -f pom.xml '-Dtest=ElectronicDocumentServiceTests,ElectronicDocumentHttpTests,ElectronicDocumentRollbackTests,ReviewWorkflowServiceTests,ReviewWorkflowHttpTests,ReviewWorkflowRollbackTests,StaffRequestServiceTests,StaffRequestHttpTests,StaffRequestOptimisticLockTests,DocumentRequestServiceTests,StudentRequestHttpTests,RequestTransitionValidatorTests' test
+.\mvnw.cmd clean test
+.\mvnw.cmd clean package
+cd ..\frontend
+npm ci
+npm run test:requests
+npm run lint
+npm run build
+```
+
+For manual testing, create an electronic request as a student, use staff Start Review → Approve → Start Processing, upload one valid PDF as staff and check READY and the student's ready notification. Verify staff downloading the PDF does **not** complete it. Download once as the owning student and confirm COMPLETED/first timestamp/count 1/history/notification. Download again and confirm count 2 without a second completion entry. Test missing/oversized/forged PDFs, a second upload, stale expectedVersion, another student, and ADMIN/unauthenticated access. Check browser layouts at 360, 768 and 1366 pixels. See `docs/issue-15-implementation-checklist.md` for the complete matrix.
+
+**Execution environment:** Java 21 production source compilation, TypeScript compilation, and all 31 Node frontend tests passed. The Linux sandbox has no Maven test-scoped artifacts, and the archive's Node modules contain Windows-native lint/bundler dependencies, so the full JUnit suite, lint, Vite production bundling, local MySQL, email and interactive browser UAT must run on Windows. These checks are not claimed as passed here.

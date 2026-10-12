@@ -120,6 +120,20 @@ export async function startStaffProcessing(id: number, expectedVersion: number):
     { expectedVersion: checkedVersion(expectedVersion) })).data
 }
 
+/** Exactly one PDF and a text version part; browser owns the multipart boundary. */
+export async function uploadIssuedDocument(id: number, expectedVersion: number, file: File): Promise<StaffRequestDetail> {
+  if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0) throw new Error('Invalid request version.')
+  const form = new FormData()
+  form.append('expectedVersion', String(expectedVersion))
+  form.append('file', file, file.name)
+  return (await apiClient.post<StaffRequestDetail>(`${STAFF_PATH}/${requirePositiveId(id)}/issued-document`,
+    form, { timeout: 60000 })).data
+}
+
+export async function saveStaffIssuedDocument(requestId: number, originalFilename: string): Promise<void> {
+  await saveAuthenticatedDownload(`${STAFF_PATH}/${requirePositiveId(requestId)}/issued-document`, originalFilename)
+}
+
 export async function saveStaffAttachment(requestId: number, attachment: StudentRequestAttachment): Promise<void> {
   await saveAuthenticatedDownload(`${STAFF_PATH}/${requirePositiveId(requestId)}/attachments/${requirePositiveId(attachment.id)}`,
     attachment.originalFilename || 'supporting-document')

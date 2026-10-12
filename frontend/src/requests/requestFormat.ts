@@ -24,7 +24,7 @@ export function formatFileSize(bytes: number): string {
 
 export function statusExplanation(status: RequestStatus, method: DeliveryMethod): string {
   if (status === 'READY' && method === 'PHYSICAL') return 'Your document is ready for collection at the location shown below.'
-  if (status === 'READY' && method === 'ELECTRONIC') return 'The electronic document is ready. Online issued-document download will be enabled in a later release.'
+  if (status === 'READY' && method === 'ELECTRONIC') return 'Your issued PDF is ready to download. The first successful download completes this request.'
   if (status === 'COMPLETED' && method === 'PHYSICAL') return 'The university recorded collection of the physical document. This request is complete.'
   if (status === 'COMPLETED') return 'The electronic document request has been completed.'
   if (status === 'ADDITIONAL_INFORMATION_REQUIRED') return 'Staff need additional information before they can continue reviewing this request.'

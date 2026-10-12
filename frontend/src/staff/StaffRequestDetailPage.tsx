@@ -11,7 +11,8 @@ import { formatFileSize, formatRequestDate, formatRequestTime } from '../request
 import type { StudentRequestAttachment, StudentRequestAction } from '../requests/requestsApi'
 import { validateReviewText } from '../requests/reviewValidation'
 import { parsePositiveId } from '../requests/requestsApi'
-import { getStaffRequest, saveStaffAttachment, startStaffReview, requestStaffInformation, approveStaffRequest, rejectStaffRequest, startStaffProcessing } from './staffRequestsApi'
+import { getStaffRequest, saveStaffAttachment, saveStaffIssuedDocument, uploadIssuedDocument, startStaffReview, requestStaffInformation, approveStaffRequest, rejectStaffRequest, startStaffProcessing } from './staffRequestsApi'
+import { StaffIssuedDocumentUpload } from './StaffIssuedDocumentUpload'
 import type { StaffRequestDetail } from './staffRequestsApi'
 import { useStaffRequestAction } from './useStaffRequestAction'
 import './staff.css'
@@ -27,8 +28,7 @@ const ACTION_LABELS: Record<ReviewAction, string> = {
   REJECT: 'Reject', START_PROCESSING: 'Start processing',
 }
 const PLANNED_ACTION_LABELS: Record<string, string> = {
-  UPLOAD_ISSUED_DOCUMENT: 'Upload issued PDF', READY_FOR_COLLECTION: 'Ready for collection',
-  COMPLETE_COLLECTION: 'Complete collection', DOWNLOAD_ISSUED_DOCUMENT: 'Verify issued PDF',
+  READY_FOR_COLLECTION: 'Ready for collection', COMPLETE_COLLECTION: 'Complete collection',
 }
 const DIALOG_DESCRIPTIONS: Record<ReviewAction, string> = {
   START_REVIEW: 'Move this submitted request into review? A permanent history entry will be recorded.',
@@ -54,6 +54,9 @@ function StaffRequestDetail({ id }: { id: number | null }) {
   const [busyFiles, setBusyFiles] = useState<number[]>([])
   const [downloadErrors, setDownloadErrors] = useState<Record<number, string>>({})
   const downloadLocks = useRef(new Set<number>())
+  const issuedLock = useRef(false)
+  const [issuedDownloading, setIssuedDownloading] = useState(false)
+  const [issuedDownloadError, setIssuedDownloadError] = useState<string | null>(null)
   const { run, busyAction, alert, fieldErrors, needsRefresh, acknowledgeFreshDetail, clearAlert } = useStaffRequestAction(id, setDetails)
 
   useEffect(() => {
@@ -132,6 +135,21 @@ function StaffRequestDetail({ id }: { id: number | null }) {
     }
   }
 
+  async function verifyIssued() {
+    if (id === null || !details?.issuedDocument || issuedLock.current) return
+    issuedLock.current = true
+    setIssuedDownloading(true)
+    setIssuedDownloadError(null)
+    try {
+      await saveStaffIssuedDocument(id, details.issuedDocument.originalFilename)
+    } catch (failure: unknown) {
+      setIssuedDownloadError(getSafeErrorMessage(failure, 'Unable to verify the issued PDF.'))
+    } finally {
+      issuedLock.current = false
+      setIssuedDownloading(false)
+    }
+  }
+
   return <>
     <PageHeader eyebrow="Staff workspace" title={details?.requestNumber ?? 'Request details'}
       description="Review the student's account, academic profile, supporting documents, and full request history."
@@ -172,11 +190,15 @@ function StaffRequestDetail({ id }: { id: number | null }) {
               disabled={busyAction !== null || needsRefresh}
               onClick={() => openDecision(action)}>{ACTION_LABELS[action]}</button>)}
         </div>
-        {details.availableActions.some((action) => !REVIEW_ACTIONS.includes(action as ReviewAction)) && <div className="staff-future-actions">
-          <p className="small text-muted mb-2">The following delivery actions become available in the next implementation phase.</p>
+        {details.availableActions.includes('UPLOAD_ISSUED_DOCUMENT') && <StaffIssuedDocumentUpload details={details}
+          submitting={busyAction !== null} needsRefresh={needsRefresh}
+          onUpload={(file) => run('UPLOAD_ISSUED_DOCUMENT', details.version,
+            (requestId, version) => uploadIssuedDocument(requestId, version, file))} />}
+        {details.availableActions.some((action) => action === 'READY_FOR_COLLECTION' || action === 'COMPLETE_COLLECTION') && <div className="staff-future-actions">
+          <p className="small text-muted mb-2">Physical delivery actions will be implemented in Issue 16.</p>
           <div className="d-flex flex-wrap gap-2">
-            {details.availableActions.filter((action) => !REVIEW_ACTIONS.includes(action as ReviewAction)).map((action) =>
-              <span className="staff-planned-action" key={action}>{PLANNED_ACTION_LABELS[action] || action}</span>)}
+            {details.availableActions.filter((action) => action === 'READY_FOR_COLLECTION' || action === 'COMPLETE_COLLECTION').map((action) =>
+              <span className="staff-planned-action" key={action}>{PLANNED_ACTION_LABELS[action]}</span>)}
           </div>
         </div>}
       </section>
@@ -226,7 +248,12 @@ function StaffRequestDetail({ id }: { id: number | null }) {
               <div><dt>Student downloads</dt><dd>{details.issuedDocument.downloadCount}</dd></div>
               {details.issuedDocument.firstDownloadedAt && <div><dt>First download</dt><dd>{formatRequestTime(details.issuedDocument.firstDownloadedAt)}</dd></div>}
             </dl> : <p className="request-callout-intro mb-0">No issued document has been uploaded.</p>}
-            {details.issuedDocument && <p className="small text-muted mb-0">Staff PDF verification download is introduced in the electronic-delivery phase.</p>}
+            {details.issuedDocument && details.availableActions.includes('DOWNLOAD_ISSUED_DOCUMENT') && <div className="mt-3">
+              <button type="button" className="btn btn-outline-primary" disabled={issuedDownloading}
+                onClick={() => void verifyIssued()}>{issuedDownloading ? 'Preparing PDF...' : 'Verify issued PDF'}</button>
+              <p className="small text-muted mt-2 mb-0">Staff verification does not complete the request or increment the student's download count.</p>
+              {issuedDownloadError && <p role="alert" className="request-inline-error mt-2">{issuedDownloadError}</p>}
+            </div>}
           </section>}
           <section className="surface-card request-detail-section" aria-labelledby="staff-files">
             <h2 className="h5 mb-2" id="staff-files">Supporting attachments</h2>

@@ -25,10 +25,13 @@ public class StudentRequestController {
 
     private final CurrentUserProvider currentUser;
     private final DocumentRequestService service;
+    private final ElectronicDocumentService electronic;
 
-    public StudentRequestController(CurrentUserProvider currentUser, DocumentRequestService service) {
+    public StudentRequestController(CurrentUserProvider currentUser, DocumentRequestService service,
+                                    ElectronicDocumentService electronic) {
         this.currentUser = currentUser;
         this.service = service;
+        this.electronic = electronic;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -64,6 +67,14 @@ public class StudentRequestController {
     @GetMapping("/{requestId}")
     public StudentRequestDetailResponse detail(@PathVariable long requestId) {
         return service.getDetail(currentUser.currentUserId(), requestId);
+    }
+
+    @GetMapping("/{requestId}/issued-document")
+    public ResponseEntity<byte[]> downloadIssuedDocument(@PathVariable long requestId) {
+        PreparedAttachmentDownload prepared = electronic.downloadForStudent(currentUser.currentUserId(), requestId);
+        byte[] bytes = prepared.bytes();
+        return ResponseEntity.ok().headers(FileDownloadHeaders.forDownload(
+                prepared.displayFilename(), prepared.contentType(), bytes.length)).body(bytes);
     }
 
     @GetMapping("/{requestId}/attachments/{attachmentId}")

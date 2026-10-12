@@ -109,6 +109,11 @@ export interface StudentRequestFilters {
   direction?: 'asc' | 'desc'
 }
 
+/** The authenticated GET prepares the PDF and completes a READY electronic request on the server. */
+export async function saveStudentIssuedDocument(requestId: number, originalFilename: string): Promise<void> {
+  await saveAuthenticatedDownload(`${REQUESTS_PATH}/${requirePositiveId(requestId)}/issued-document`, originalFilename)
+}
+
 export class SubmissionOutcomeUnconfirmedError extends Error {
   constructor() { super('Request creation response was not confirmed.') }
 }

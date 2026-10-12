@@ -5,6 +5,7 @@ import com.unidoc.common.api.PageResponse;
 import com.unidoc.common.api.RequestSummary;
 import com.unidoc.file.FileDownloadHeaders;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +14,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
@@ -22,10 +25,13 @@ import java.time.LocalDate;
 public class StaffRequestController {
     private final StaffRequestService service;
     private final CurrentUserProvider currentUser;
+    private final ElectronicDocumentService electronic;
 
-    public StaffRequestController(StaffRequestService service, CurrentUserProvider currentUser) {
+    public StaffRequestController(StaffRequestService service, CurrentUserProvider currentUser,
+                                  ElectronicDocumentService electronic) {
         this.service = service;
         this.currentUser = currentUser;
+        this.electronic = electronic;
     }
 
     @GetMapping
@@ -80,6 +86,26 @@ public class StaffRequestController {
     public StaffRequestDetailResponse startProcessing(@PathVariable long requestId,
                                                        @Valid @RequestBody StartReviewRequest request) {
         return service.startProcessing(currentUser.currentUserId(), requestId, request.expectedVersion());
+    }
+
+    @PostMapping(value = "/{requestId}/issued-document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public StaffRequestDetailResponse uploadIssuedDocument(@PathVariable long requestId,
+            @RequestParam(required = false) Long expectedVersion,
+            @RequestPart(name = "file", required = false) java.util.List<MultipartFile> files) {
+        if (files != null && files.size() > 1) {
+            throw new com.unidoc.common.exception.InvalidQueryParameterException(
+                    "Exactly one issued PDF file is allowed.");
+        }
+        return electronic.upload(currentUser.currentUserId(), requestId, expectedVersion,
+                files == null || files.isEmpty() ? null : files.getFirst());
+    }
+
+    @GetMapping("/{requestId}/issued-document")
+    public ResponseEntity<byte[]> downloadIssuedDocument(@PathVariable long requestId) {
+        PreparedAttachmentDownload prepared = electronic.downloadForStaff(currentUser.currentUserId(), requestId);
+        byte[] bytes = prepared.bytes();
+        return ResponseEntity.ok().headers(FileDownloadHeaders.forDownload(
+                prepared.displayFilename(), prepared.contentType(), bytes.length)).body(bytes);
     }
 
     @GetMapping("/{requestId}/attachments/{attachmentId}")

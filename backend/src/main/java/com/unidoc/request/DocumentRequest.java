@@ -175,6 +175,16 @@ public class DocumentRequest extends AuditableEntity {
         status = Objects.requireNonNull(newStatus);
     }
 
+    /** Issued PDF has been committed; the request is now ready for its owner. */
+    public void markElectronicReady(Instant when) {
+        readyAt = Objects.requireNonNull(when);
+    }
+
+    /** First authorized student download, after the complete PDF was read. */
+    public void markElectronicCompleted(Instant when) {
+        completedAt = Objects.requireNonNull(when);
+    }
+
     public Long getId() {
         return id;
     }

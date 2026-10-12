@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import type { ReactNode, SyntheticEvent } from 'react'
 
 export interface ConfirmDialogProps {
@@ -20,6 +20,9 @@ export function ConfirmDialog({
   open, title, description, confirmLabel = 'Confirm', cancelLabel = 'Cancel',
   destructive = false, busy = false, disabledConfirm = false, children, onConfirm, onCancel,
 }: ConfirmDialogProps) {
+  const id = useId()
+  const titleId = `${id}-title`
+  const descriptionId = `${id}-description`
   const dialogRef = useRef<HTMLDialogElement>(null)
   const oldFocus = useRef<HTMLElement | null>(null)
 
@@ -45,10 +48,10 @@ export function ConfirmDialog({
   }
 
   return (
-    <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description" onCancel={handleCancel}>
+    <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={handleCancel}>
       <div className="confirm-dialog-inner">
-        <h2 id="confirm-title" className="h4 mb-3">{title}</h2>
-        <p id="confirm-description" className="text-muted mb-3">{description}</p>
+        <h2 id={titleId} className="h4 mb-3">{title}</h2>
+        <p id={descriptionId} className="text-muted mb-3">{description}</p>
         {children}
         <div className="d-flex justify-content-end flex-wrap gap-2 mt-4">
           <button type="button" className="btn btn-outline-secondary" onClick={onCancel} disabled={busy}>{cancelLabel}</button>

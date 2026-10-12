@@ -9,7 +9,8 @@ import { RequestStatus } from '../components/RequestStatus'
 import { formatFileSize, formatRequestDate, formatRequestTime, statusExplanation } from './requestFormat'
 import { StudentInformationResponseForm } from './StudentInformationResponseForm'
 import type { ResponseNotice } from './StudentInformationResponseForm'
-import { getStudentRequest, parsePositiveId, saveStudentAttachment } from './requestsApi'
+import { getStudentRequest, parsePositiveId, saveStudentAttachment, saveStudentIssuedDocument } from './requestsApi'
+import { useNotificationCount } from '../notifications/NotificationCountContext'
 import type { StudentRequestDetail, StudentRequestAttachment } from './requestsApi'
 import './requests.css'
 
@@ -41,6 +42,11 @@ export function StudentRequestDetailPage() {
   const [pendingFiles, setPendingFiles] = useState<number[]>([])
   const [downloadErrors, setDownloadErrors] = useState<Record<number, string>>({})
   const downloadLocks = useRef(new Set<number>())
+  const { refreshUnreadCount } = useNotificationCount()
+  const issuedDownloadLock = useRef(false)
+  const [issuedDownloading, setIssuedDownloading] = useState(false)
+  const [issuedDownloadError, setIssuedDownloadError] = useState<string | null>(null)
+  const [issuedDownloadNotice, setIssuedDownloadNotice] = useState<string | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -82,6 +88,32 @@ export function StudentRequestDetailPage() {
     } finally {
       downloadLocks.current.delete(attachment.id)
       setPendingFiles((previous) => previous.filter((pending) => pending !== attachment.id))
+    }
+  }
+
+  async function downloadIssued() {
+    if (id === null || !details?.issuedDocument ||
+      !details.availableActions.includes('DOWNLOAD_ISSUED_DOCUMENT') || issuedDownloadLock.current) return
+    issuedDownloadLock.current = true
+    setIssuedDownloading(true)
+    setIssuedDownloadError(null)
+    setIssuedDownloadNotice(null)
+    try {
+      await saveStudentIssuedDocument(id, details.issuedDocument.originalFilename)
+      void refreshUnreadCount()
+      try {
+        const updated = await getStudentRequest(id)
+        setDetails(updated)
+        setIssuedDownloadNotice('Download prepared successfully. The current request status and download count have been refreshed.')
+      } catch {
+        // Download succeeded but the follow-up read is not authoritative: never invent COMPLETED locally.
+        setIssuedDownloadNotice('Download prepared. The request status could not be refreshed; use Refresh to check it.')
+      }
+    } catch (failure: unknown) {
+      setIssuedDownloadError(getSafeErrorMessage(failure, 'The issued PDF could not be downloaded.'))
+    } finally {
+      issuedDownloadLock.current = false
+      setIssuedDownloading(false)
     }
   }
 
@@ -154,7 +186,9 @@ export function StudentRequestDetailPage() {
                   <h2 className="h5 mb-2" id="request-issued-title">Electronic document</h2>
                   {details.issuedDocument ? (
                     <>
-                      <p className="request-callout-intro">Document metadata is available. Online issued-document downloading is not enabled in this release.</p>
+                      <p className="request-callout-intro">{details.status === 'READY'
+                        ? 'Your PDF is ready. The first successful authenticated download completes the electronic request.'
+                        : 'Your PDF remains available for download. Later downloads do not change the completed status.'}</p>
                       <dl className="request-collection-facts">
                         <div><dt>Document name</dt><dd className="request-wrap">{details.issuedDocument.originalFilename}</dd></div>
                         <div><dt>Size</dt><dd>{formatFileSize(details.issuedDocument.sizeBytes)}</dd></div>
@@ -162,6 +196,12 @@ export function StudentRequestDetailPage() {
                         <div><dt>Recorded downloads</dt><dd>{details.issuedDocument.downloadCount}</dd></div>
                         {details.issuedDocument.firstDownloadedAt && <div><dt>First downloaded</dt><dd>{formatRequestTime(details.issuedDocument.firstDownloadedAt)}</dd></div>}
                       </dl>
+                      {details.availableActions.includes('DOWNLOAD_ISSUED_DOCUMENT') && <div className="mt-3">
+                        <button type="button" className="btn btn-primary" disabled={issuedDownloading}
+                          onClick={() => void downloadIssued()}>{issuedDownloading ? 'Preparing document...' : 'Download document'}</button>
+                        {issuedDownloadError && <p role="alert" className="request-inline-error mt-2">{issuedDownloadError}</p>}
+                        {issuedDownloadNotice && <p role="status" className="small text-muted mt-2 mb-0">{issuedDownloadNotice}</p>}
+                      </div>}
                     </>
                   ) : <p className="request-callout-intro mb-0">No issued document is available yet. Your supporting attachments are listed separately below.</p>}
                 </section>

@@ -1,6 +1,6 @@
 import { filenameFromDisposition } from './downloadNames'
 import axios, { AxiosHeaders } from 'axios'
-import { getApiError } from './errors'
+import { getApiError, isApiErrorResponse } from './errors'
 import { endSession, getStoredSession } from '../auth/session'
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:8080'
@@ -56,7 +56,22 @@ export interface BinaryResponse {
 
 /** Protected browser downloads. Do not construct public filesystem URLs. */
 export async function getBinaryResource(path: string, fallbackName = 'download'): Promise<BinaryResponse> {
-  const response = await apiClient.get<Blob>(path, { responseType: 'blob' })
+  let response
+  try {
+    response = await apiClient.get<Blob>(path, { responseType: 'blob' })
+  } catch (failure: unknown) {
+    // For responseType=blob, Axios also returns JSON errors as Blobs. Recover only the
+    // documented small API error envelope; never print binary data or raw error bodies.
+    if (axios.isAxiosError(failure) && failure.response?.data instanceof Blob &&
+        failure.response.data.size <= 64 * 1024 &&
+        /(?:application\/json|application\/problem\+json)/i.test(failure.response.data.type)) {
+      try {
+        const parsed: unknown = JSON.parse(await failure.response.data.text())
+        if (isApiErrorResponse(parsed)) Object.assign(failure.response, { data: parsed })
+      } catch { /* Fall back to the standard safe network/HTTP message. */ }
+    }
+    throw failure
+  }
   const disposition = response.headers['content-disposition']
   const filename = filenameFromDisposition(typeof disposition === 'string' ? disposition : undefined, fallbackName)
   return {

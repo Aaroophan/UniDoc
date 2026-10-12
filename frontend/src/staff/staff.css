@@ -22,3 +22,6 @@
 @media (max-width: 380px) {
   .staff-result-row .request-result-facts { grid-template-columns: minmax(0, 1fr); }
 }
+
+.staff-issued-upload { margin-top: 1.2rem; width: 100%; max-width: 37rem; border-top: 1px solid #e8dfe3; padding-top: 1.2rem; }
+.staff-issued-upload .request-inline-error { margin-top: .5rem; }
