@@ -158,6 +158,18 @@ public class DocumentRequest extends AuditableEntity {
         }
     }
 
+    /**
+     * Local-only stable identifier for a newly inserted demonstration request.
+     * Never called by the HTTP submission workflow.
+     */
+    public void assignDemoRequestNumber(String seedNumber) {
+        if (id == null || requestNumber != null || seedNumber == null
+                || !seedNumber.matches("UDR-DEMO-[0-9]{4}")) {
+            throw new IllegalStateException("Demo request number may only be assigned on a fresh seeded request.");
+        }
+        requestNumber = seedNumber;
+    }
+
     /** Current staff question; previous questions remain in append-only history. */
     public void requestAdditionalInformation(String message) {
         additionalInformationMessage = Objects.requireNonNull(message).strip();

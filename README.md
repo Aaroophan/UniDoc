@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements **Issues 1–18** of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student request tracking, staff review and information cycles, electronic issued-PDF delivery, physical collection, and **Issue 17 administrator monitoring, dashboard, reports, and safe CSV export**, plus **Issue 18 responsive, accessible, recoverable cross-feature UX**. Deterministic demo data and release verification remain in subsequent issues.
+UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements **Issues 1–19** of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student request tracking, staff review and information cycles, electronic issued-PDF delivery, physical collection, and **Issue 17 administrator monitoring, dashboard, reports, and safe CSV export**, plus **Issue 18 responsive, accessible, recoverable cross-feature UX**. **Issue 19** adds deterministic demo accounts, catalogue and request states, protected synthetic files, a guarded database-only reset, and Windows one-click startup. Full release verification remains in Issue 20.
 
 
 ## Prerequisites
@@ -78,7 +78,7 @@ The application account must not be MySQL root and must have access only to the 
 
 ## 3. Load `.env` into the current PowerShell process
 
-The later one-click launcher will perform this step. Until the later one-click launcher is implemented, load the file manually from the repository root:
+For manual startup, load the environment as follows. Issue 19 also supplies `start-dev.cmd`, which performs this step automatically:
 
 ```powershell
 Get-Content .env |
@@ -130,7 +130,7 @@ Invoke-RestMethod http://localhost:8080/api/health
 
 The response is `{ "status": "ok" }`. Authentication, student profile, administrator account management and document catalogue APIs are available; other business APIs are added in their approved implementation issues.
 
-The root wrapper names `start-dev.cmd` and `reset-demo-data.cmd` are reserved for the one-click startup and reset work defined later in the implementation plan; they are intentionally not implemented in Issue 1.
+The Issue 19 root wrappers `start-dev.cmd` and `reset-demo-data.cmd` now implement one-click local startup and the safeguarded demo reset. See the Issue 19 section below.
 
 ## Issue 5 frontend authentication and navigation
 
@@ -198,7 +198,7 @@ See `docs/issue-07-implementation-checklist.md` for feature boundaries and local
 
 All authenticated users can now open `/catalogue` and see only **active** document types, sorted by name, including their supporting-document instructions, delivery methods and collection information when physical delivery is offered. STUDENT users can choose **Request this document**, which navigates to `/requests/new?documentTypeId=...`. The request submission API is Issue 11 and the complete Issue 12 frontend provides a live request form with authoritative profile and catalogue checks.
 
-An authenticated **ADMIN** opens `/admin/document-types` to create, edit, filter, paginate, activate and deactivate entries. Only admins can use the management APIs. There is no hard deletion. The first five proposal document types are created by the deterministic seed in **Issue 19**, so an empty catalogue before manual creation is expected.
+An authenticated **ADMIN** opens `/admin/document-types` to create, edit, filter, paginate, activate and deactivate entries. Only admins can use the management APIs. There is no hard deletion. The five proposal document types are created on startup whenever `UNIDOC_SEED_DEMO=true` (Issue 19); disable seeding explicitly when testing an empty catalogue.
 
 | Endpoint | Role | Response / behavior |
 | --- | --- | --- |
@@ -233,7 +233,7 @@ See `docs/issue-08-implementation-checklist.md` for the exact tests and the late
 - `frontend/` contains the only browser application.
 - `data/uploads/` is private runtime storage and is never served as a public static directory.
 - `docs/` contains the approved project documents and implementation plan.
-- `scripts/` is reserved for the documented operational PowerShell scripts.
+- `scripts/` contains the documented startup and guarded database-reset PowerShell implementations invoked by root `.cmd` wrappers.
 
 See `docs/09-deployment-strategy.md` for the complete local deployment design and `docs/12-implementation-plan.md` for the remaining implementation sequence.
 
@@ -319,7 +319,7 @@ The new request form shows the catalogue requirements, supporting-file condition
 
 `/requests` lists only the authenticated student's own requests, newest first, with status/delivery filters, a clear action, and server-side zero-based pagination (10 per page). Filters remain in the URL while paging and reset the page number when changed. The unfiltered empty state goes to the catalogue. `/requests/:requestId` displays catalogue-name snapshot, immutable request details, status explanation, delivery/collection information, additional-information and rejection notes, issued metadata if returned, supporting files, and backend-ordered status history. A missing or other student's ID produces the same not-found view. The frontend exposes no request edit or cancellation command.
 
-Attachment downloads use the **owner-scoped Bearer-authenticated** `/api/student/requests/{id}/attachments/{attachmentId}` endpoint and save a Blob with a sanitized response/metadata filename. The browser revokes the temporary Blob URL. Each row has independent pending and error states. No protected file path or public upload URL is exposed. The existing Spring Security CORS configuration exposes `Content-Disposition`; the existing file handler returns `nosniff` and private/no-store headers. Responding to staff information requests and downloading the issued final document are *not yet implemented* (Issues 14 and 15); the detail screen displays their state but does not create dead or unauthorized buttons.
+Attachment downloads use the **owner-scoped Bearer-authenticated** `/api/student/requests/{id}/attachments/{attachmentId}` endpoint and save a Blob with a sanitized response/metadata filename. The browser revokes the temporary Blob URL. Each row has independent pending and error states. No protected file path or public upload URL is exposed. The existing Spring Security CORS configuration exposes `Content-Disposition`; the existing file handler returns `nosniff` and private/no-store headers. Responding to staff information requests and downloading issued documents are implemented by Issues 14 and 15; the student detail page exposes them only when the workflow permits.
 
 ### Verification (Windows PowerShell, from repository root)
 
@@ -513,3 +513,105 @@ npm --prefix frontend run test:requests
 npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
+
+
+## Issue 19 — Deterministic demo data and Windows local operations
+
+**Recommended local start:** ensure MySQL is running, configure the root `.env` credentials, and double-click `start-dev.cmd` (or run it from Command Prompt/PowerShell). The wrapper invokes `scripts/start-dev.ps1` with a process-local execution-policy bypass, so signing the script is not required. The launcher validates Java 21/Node/npm, generates a missing 32-byte Base64 JWT secret into the **ignored** `.env`, checks local MySQL settings and port availability, creates `frontend/.env.local` and the protected upload directory, installs missing/stale frontend dependencies with `npm ci`, and starts the backend/frontend in separate terminals. The API health wait has a **maximum of 180 seconds**; no unknown process is killed. The launcher opens `http://localhost:5173` after the API becomes healthy.
+
+**Required `.env` flags for the normal demo:**
+
+```dotenv
+UNIDOC_SEED_DEMO=true
+UNIDOC_RESET_DEMO=false
+UNIDOC_RESET_CONFIRMATION=
+UNIDOC_EMAIL_ENABLED=false
+```
+
+For a clean local demo, `UNIDOC_DB_URL` must target `jdbc:mysql://localhost:3306/unidoc?...`, the MySQL `unidoc` schema and the `unidoc_app` account must exist, and `UNIDOC_DB_PASSWORD` must be updated. Keep `UNIDOC_JWT_SECRET` and all other backend secrets in `.env` only. The source repository and the distributed ZIP intentionally do **not** include `.env`, `frontend/.env.local`, node modules, compiled artifacts, actual uploads, or database dumps.
+
+### Local-only demonstration credentials
+
+All seeded identities and personal fields are synthetic. The four demo accounts are ACTIVE on a fresh database and use the **local-only demo password** `UniDocDemo#2026`. This password is hard-coded intentionally *only for disposable demonstration data*; change or disable demo accounts before any non-demo use. Existing accounts are **not** rehashed or reset on startup, so the documented password stops working if an administrator has changed an account password.
+
+| Role | Email | Purpose |
+| --- | --- | --- |
+| ADMIN | `admin.demo@unidoc.test` | Dashboard, monitoring, accounts, reports |
+| STAFF | `staff.demo@unidoc.test` | Review and delivery workflow |
+| STUDENT | `student.demo@unidoc.test` | Student requests, including completed electronic example |
+| STUDENT | `student2.demo@unidoc.test` | Alternate owner and ready electronic PDF example |
+
+Each student has a complete synthetic academic profile; no real addresses, phone numbers or registration numbers are used. The catalogue includes Student Confirmation Letter, Academic Transcript, Recommendation Letter, Certificate and Student Status Letter, all initially available electronically and physically.
+
+The following ten request numbers are stable across starts and uniquely identify seeded scenarios even if the MySQL auto-increment IDs change after a reset:
+
+| Request number | Delivery | Seeded state |
+| --- | --- | --- |
+| `UDR-DEMO-0001` | Electronic | SUBMITTED |
+| `UDR-DEMO-0002` | Physical | UNDER_REVIEW |
+| `UDR-DEMO-0003` | Electronic | ADDITIONAL_INFORMATION_REQUIRED |
+| `UDR-DEMO-0004` | Physical | APPROVED |
+| `UDR-DEMO-0005` | Electronic | PROCESSING |
+| `UDR-DEMO-0006` | Electronic | READY, sample issued PDF |
+| `UDR-DEMO-0007` | Physical | READY, collection details |
+| `UDR-DEMO-0008` | Electronic | REJECTED with reason |
+| `UDR-DEMO-0009` | Electronic | COMPLETED, sample issued PDF |
+| `UDR-DEMO-0010` | Physical | COMPLETED, collection date and note |
+
+**Automated-test isolation:** Maven Surefire explicitly disables automatic seed/reset in its forked test JVM so `mvnw clean test` works even when a Windows shell has `UNIDOC_SEED_DEMO=true`. The seed integration test calls the seed service itself; unrelated tests keep their isolated H2 datasets. `DemoAutomaticStartupIsolationTests` verifies this protection. These test-only overrides do not affect `start-dev.cmd` or normal Spring Boot execution. For direct IDE test runs, set the two demo flags to `false` in the IDE's test environment.
+
+On a clean database, the deterministic seed creates **4 accounts, 2 profiles, 5 types, 10 requests, 38 history entries, 39 in-app notifications, 5 synthetic PDF supporting attachments and 2 issued PDF records/files**. Synthetic PDFs are stored in the protected filesystem beneath `data/uploads/requests/{numericId}/...`, are valid readable one-page PDFs, and use deterministic UUID-formatted filenames; neither storage paths nor bytes are publicly served. Direct repository inserts intentionally do **not** publish any SMTP events during seeding. Normal user-initiated workflow notifications still use the configured after-commit email behavior.
+
+Seeding is additive/idempotent: existing demo emails/codes/request numbers remain unchanged on normal startup. It does not reset manually progressed request statuses, regenerate existing account passwords, reactivate accounts or overwrite catalogue edits. This is why a new **reset** is needed to restore the exact ten-state demo dataset after experimentation. An existing catalogue name conflicting with a required demo code is treated as a seed error rather than overwriting a different document type.
+
+### Destructive reset — explicit operator approval required
+
+**Back up any MySQL data that matters before resetting. This deletes ALL records in UniDoc's eight application tables, including non-demo users and requests.**
+
+1. Close the normal backend (port 8080 must not be listening). Confirm your `.env` targets local MySQL `unidoc` and keep a database backup if needed.
+2. Run `reset-demo-data.cmd` from the project root. It displays the local host/schema and warnings but never prints your password or JWT.
+3. Type **`RESET`** exactly when prompted. Any other input cancels with no database operation.
+4. Choose whether to re-create the demo fixtures immediately (`Y` by default). The script sets `UNIDOC_RESET_DEMO=true`, `UNIDOC_RESET_CONFIRMATION=RESET-UNIDOC-DEMO`, `SERVER_PORT=0`, and disables email **only for this process**.
+5. The backend starts **without a web server**, independently verifies both reset flags, the non-web port and the live local MySQL schema (`unidoc`), deletes all eight tables in foreign-key-safe order inside one database transaction, optionally reseeds, and exits. It refuses H2, another schema, a remote MySQL URL, or an incorrect confirmation.
+6. Run `start-dev.cmd` again to launch UniDoc. The reset-mode environment overrides do not persist back to `.env`.
+
+**Uploads are never deleted by reset.** Existing `data/uploads` files, `.tmp`, markers and requests directories remain exactly where they were, which means orphan files are possible after reset. To inspect them, first positively verify the configured `UNIDOC_STORAGE_ROOT`; make a manual archive/backup, and remove only files you explicitly decide are safe to remove. There is no automatic orphan cleanup.
+
+### Manual startup and build commands (without wrappers)
+
+```powershell
+cd C:\ASV\Projects\UniDoc
+# Load only non-comment KEY=VALUE lines from your ignored .env.
+Get-Content .env | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' } | ForEach-Object {
+    $key, $value = $_.Split('=', 2)
+    [Environment]::SetEnvironmentVariable($key, $value, 'Process')
+}
+# In this same terminal:
+.\backend\mvnw.cmd -f backend\pom.xml spring-boot:run
+# In a second terminal, after configuring frontend/.env.local:
+npm --prefix frontend run dev
+```
+
+```powershell
+.\backend\mvnw.cmd -f backend\pom.xml clean test
+.\backend\mvnw.cmd -f backend\pom.xml clean package
+npm --prefix frontend ci
+npm --prefix frontend run test:requests
+npm --prefix frontend run lint
+npm --prefix frontend run build
+```
+
+Verify `GET http://localhost:8080/api/health` returns `{ "status": "ok" }`. On a new seeded database, log in with each demo role, browse all five catalogue types, open the seeded request lists/history and download a synthetic PDF using the appropriate authenticated student account. Opening `UDR-DEMO-0006` with `student2.demo@unidoc.test` and downloading its READY electronic PDF intentionally transitions it to COMPLETED; reset/reseed to restore the READY example.
+
+### Local troubleshooting
+
+- **MySQL connection/grants:** Confirm MySQL is listening on port 3306; test `mysql --host=localhost --user=unidoc_app --password unidoc`; check the schema charset/collation and exactly the documented privileges. Never run UniDoc as MySQL root.
+- **JWT configuration:** `UNIDOC_JWT_SECRET` must be valid Base64 for 32+ bytes. The start wrapper generates a secret only if absent/placeholder; existing invalid secrets are rejected. Changing the secret invalidates saved sessions.
+- **CORS/API URL:** For the default setup use `UNIDOC_ALLOWED_ORIGINS=http://localhost:5173` and `VITE_API_BASE_URL=http://localhost:8080`; restart Vite after editing its environment file.
+- **Protected uploads:** Ensure `UNIDOC_STORAGE_ROOT` resolves outside any frontend public or backend static directory, is writable, and respects the 5 MiB supporting/10 MiB issued limits. A seed collision with different file bytes is intentionally rejected, not overwritten.
+- **Email:** With `UNIDOC_EMAIL_ENABLED=false`, in-app notifications work without Gmail. To test SMTP, configure a legitimate Gmail App Password privately, an appropriate sender, and enable email temporarily. Failed SMTP must not roll back committed workflows; do not display passwords in logs/screenshots.
+- **Seeding duplicates:** Inspect the seed email, document code/name and request number natural keys. Existing records are not overwritten; a conflicting different catalogue code/name must be reconciled before seeding or handled by a guarded reset.
+- **Port collisions:** Inspect `Get-NetTCPConnection -State Listen -LocalPort 8080,5173,3306` and then `Get-Process -Id <PID>` (use the actual reported PID). Stop a process only after verifying you own and intend to stop it. The scripts do not kill unknown processes.
+- **Reset refused:** Confirm backend is stopped, use `reset-demo-data.cmd`, enter `RESET` exactly, verify the actual local MySQL `unidoc` schema, and read the server-side guard error. Never bypass reset confirmation or disable foreign-key checks.
+
+See `docs/issue-19-implementation-checklist.md` for the full Issue 19 requirement matrix and Windows acceptance scenarios. Full-project release gates remain in Issue 20.

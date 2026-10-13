@@ -90,6 +90,20 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Tests must not seed or reset their own H2 databases when the developer has demo mode enabled in Windows. -->
+					<!-- These flags apply only to the forked Maven test JVM; normal app startup still follows .env. -->
+					<systemPropertyVariables>
+						<app.demo.seed-enabled>false</app.demo.seed-enabled>
+						<app.demo.reset-enabled>false</app.demo.reset-enabled>
+						<UNIDOC_SEED_DEMO>false</UNIDOC_SEED_DEMO>
+						<UNIDOC_RESET_DEMO>false</UNIDOC_RESET_DEMO>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

@@ -11,8 +11,9 @@ frontend/dist/
 backend/target/
 
 # Runtime uploads (retain the empty directory marker)
-data/uploads/*
+data/uploads/**
 !data/uploads/.gitkeep
+backend/data/
 
 # Local database exports and logs
 *.sql
