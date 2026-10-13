@@ -107,6 +107,32 @@ function Invoke-Gate {
     Write-Host ("{0}: {1} ({2}s)" -f $(if ($success) { 'PASS' } else { 'FAIL' }), $Name, $elapsed)
 }
 
+# A failed npm ci may leave node_modules incomplete. Do not run lint/build
+# against that half-installed tree or turn one file lock into several fake defects.
+function Add-BlockedGate {
+    param(
+        [string]$Name,
+        [string[]]$Arguments,
+        [string]$LogName,
+        [string]$Reason,
+        [string]$ExpectedArtifact = ''
+    )
+    $logFile = Join-Path $evidence $LogName
+    Set-Content -LiteralPath $logFile -Value $Reason -Encoding UTF8
+    $results.Add([pscustomobject]@{
+        name = $Name
+        command = 'npm.cmd ' + ($Arguments -join ' ')
+        utc = ([DateTimeOffset]::UtcNow).ToString('o')
+        durationSeconds = 0
+        exitCode = $null
+        result = 'BLOCKED'
+        artifact = $(if ($ExpectedArtifact) { [System.IO.Path]::GetFileName($ExpectedArtifact) } else { '' })
+        log = $LogName
+        note = $Reason
+    }) | Out-Null
+    Write-Host ('BLOCKED: ' + $Name + ' - ' + $Reason)
+}
+
 function Get-BackendTestCounts {
     $reportPath = Join-Path $backend 'target\surefire-reports'
     $aggregate = [ordered]@{ tests = 0; passed = 0; failures = 0; errors = 0; skipped = 0; files = 0 }
@@ -141,15 +167,41 @@ Invoke-Gate -Name 'Backend clean package' -WorkingDirectory $backend -Executable
     -Arguments @('clean', 'package') -LogName '02-backend-package.log' `
     -ExpectedArtifact (Join-Path $backend 'target\unidoc-backend-0.0.1-SNAPSHOT.jar')
 $backendPackageTests = Get-BackendTestCounts
-Invoke-Gate -Name 'Frontend npm ci' -WorkingDirectory $frontend -Executable $npmExe `
-    -Arguments @('ci') -LogName '03-frontend-ci.log'
-Invoke-Gate -Name 'Frontend request tests' -WorkingDirectory $frontend -Executable $npmExe `
-    -Arguments @('run', 'test:requests') -LogName '04-frontend-tests.log'
-Invoke-Gate -Name 'Frontend lint' -WorkingDirectory $frontend -Executable $npmExe `
-    -Arguments @('run', 'lint') -LogName '05-frontend-lint.log'
-Invoke-Gate -Name 'Frontend production build' -WorkingDirectory $frontend -Executable $npmExe `
-    -Arguments @('run', 'build') -LogName '06-frontend-build.log' `
-    -ExpectedArtifact (Join-Path $frontend 'dist\index.html')
+# On Windows Vite/Rolldown may keep a native .node file open. npm ci
+# removes node_modules, so running it under an active dev server can corrupt
+# the local dependency installation (EPERM unlink). Never kill processes.
+$frontendListeners = @(Get-NetTCPConnection -State Listen -LocalPort 5173 -ErrorAction SilentlyContinue)
+if ($frontendListeners.Count -gt 0) {
+    $ownerPid = [int]$frontendListeners[0].OwningProcess
+    $ownerProcess = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue
+    $ownerName = if ($null -ne $ownerProcess) { $ownerProcess.ProcessName } else { 'unknown' }
+    $reason = "Port 5173 is occupied (PID $ownerPid; process $ownerName). Close the frontend/Vite terminal normally before npm ci; no process was terminated."
+    Add-BlockedGate -Name 'Frontend npm ci' -Arguments @('ci') `
+        -LogName '03-frontend-ci.log' -Reason $reason
+} else {
+    Invoke-Gate -Name 'Frontend npm ci' -WorkingDirectory $frontend -Executable $npmExe `
+        -Arguments @('ci') -LogName '03-frontend-ci.log'
+}
+
+$dependencyGate = $results[$results.Count - 1]
+if ($dependencyGate.result -eq 'PASS') {
+    Invoke-Gate -Name 'Frontend request tests' -WorkingDirectory $frontend -Executable $npmExe `
+        -Arguments @('run', 'test:requests') -LogName '04-frontend-tests.log'
+    Invoke-Gate -Name 'Frontend lint' -WorkingDirectory $frontend -Executable $npmExe `
+        -Arguments @('run', 'lint') -LogName '05-frontend-lint.log'
+    Invoke-Gate -Name 'Frontend production build' -WorkingDirectory $frontend -Executable $npmExe `
+        -Arguments @('run', 'build') -LogName '06-frontend-build.log' `
+        -ExpectedArtifact (Join-Path $frontend 'dist\index.html')
+} else {
+    $reason = 'Not executed because frontend dependency installation did not pass. Stop Vite/other Node file users and rerun verify-release.cmd.'
+    Add-BlockedGate -Name 'Frontend request tests' -Arguments @('run', 'test:requests') `
+        -LogName '04-frontend-tests.log' -Reason $reason
+    Add-BlockedGate -Name 'Frontend lint' -Arguments @('run', 'lint') `
+        -LogName '05-frontend-lint.log' -Reason $reason
+    Add-BlockedGate -Name 'Frontend production build' -Arguments @('run', 'build') `
+        -LogName '06-frontend-build.log' -Reason $reason `
+        -ExpectedArtifact (Join-Path $frontend 'dist\index.html')
+}
 
 $passed = @($results | Where-Object { $_.result -eq 'PASS' }).Count
 $allPassed = ($passed -eq $results.Count)
