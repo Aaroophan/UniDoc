@@ -1,6 +1,10 @@
 package com.unidoc.demo;
 
 import com.unidoc.catalogue.DocumentTypeRepository;
+import com.unidoc.admin.AdminDashboardService;
+import com.unidoc.admin.RequestReportFilter;
+import com.unidoc.admin.RequestReportService;
+import com.unidoc.admin.RequestReportRow;
 import com.unidoc.notification.NotificationRepository;
 import com.unidoc.profile.StudentProfileRepository;
 import com.unidoc.request.DeliveryMethod;
@@ -19,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +47,8 @@ class DemoSeedServiceTests {
     @Autowired IssuedDocumentRepository issued;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired DemoResetService reset;
+    @Autowired AdminDashboardService dashboard;
+    @Autowired RequestReportService report;
 
     @Test
     void bothDemoTransactionalServicesAreProxiedBySpring() {
@@ -60,6 +67,30 @@ class DemoSeedServiceTests {
         assertThat(users.count()).isEqualTo(4);
         assertThat(history.count()).isEqualTo(38);
         assertThat(notifications.count()).isEqualTo(39);
+        // Final-release cross-feature gate: the real dashboard and report queries must
+        // agree on the known deterministic seed, without private test-only counters.
+        long adminId = users.findByNormalizedEmail(DemoSeedFixtures.ADMIN_EMAIL).orElseThrow().getId();
+        var seedDashboard = dashboard.dashboard(adminId);
+        assertThat(seedDashboard.totalRequests()).isEqualTo(10);
+        assertThat(seedDashboard.pendingRequests()).isEqualTo(3);
+        assertThat(seedDashboard.approvedRequests()).isEqualTo(1);
+        assertThat(seedDashboard.processingRequests()).isEqualTo(1);
+        assertThat(seedDashboard.rejectedRequests()).isEqualTo(1);
+        assertThat(seedDashboard.readyRequests()).isEqualTo(2);
+        assertThat(seedDashboard.completedRequests()).isEqualTo(2);
+        assertThat(seedDashboard.byDeliveryMethod()).containsEntry(DeliveryMethod.ELECTRONIC, 6L)
+                .containsEntry(DeliveryMethod.PHYSICAL, 4L);
+        assertThat(seedDashboard.byDocumentType()).extracting(group -> group.count())
+                .containsExactlyInAnyOrder(2L, 2L, 2L, 2L, 2L);
+        assertThat(seedDashboard.recentRequests()).hasSize(10);
+        var allRows = RequestReportFilter.parse(null, null, null, null, null);
+        assertThat(report.report(adminId, allRows, 0, 3, null, null).totalItems()).isEqualTo(10);
+        String seedCsv = new String(report.csv(adminId, allRows, null, null), StandardCharsets.UTF_8);
+        assertThat(seedCsv.lines().filter(line -> line.startsWith("UDR-DEMO-")).count()).isEqualTo(10);
+        var readyElectronic = RequestReportFilter.parse(null, null, "READY", null, "ELECTRONIC");
+        assertThat(report.report(adminId, readyElectronic, 0, 20, null, null).items())
+                .extracting(RequestReportRow::requestNumber).containsExactly("UDR-DEMO-0006");
+
         for (var type : DemoSeedFixtures.TYPES) {
             var catalogue = types.findByCode(type.code()).orElseThrow();
             assertThat(catalogue.getName()).isEqualTo(type.name());

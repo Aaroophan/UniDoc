@@ -615,3 +615,22 @@ Verify `GET http://localhost:8080/api/health` returns `{ "status": "ok" }`. On a
 - **Reset refused:** Confirm backend is stopped, use `reset-demo-data.cmd`, enter `RESET` exactly, verify the actual local MySQL `unidoc` schema, and read the server-side guard error. Never bypass reset confirmation or disable foreign-key checks.
 
 See `docs/issue-19-implementation-checklist.md` for the full Issue 19 requirement matrix and Windows acceptance scenarios. Full-project release gates remain in Issue 20.
+
+
+## Issue 20 — Final verification and local release gate
+
+The final dependency gate is documented in `docs/issue-20-release-checklist.md`. This is a **release candidate** until the Windows/MySQL/browser/SMTP/manual checks are recorded as passed; passing earlier Issue 19 checks alone is not enough.
+
+From the repository root on Windows, run:
+
+```powershell
+.\verify-release.cmd
+```
+
+The wrapper runs backend Maven `clean test` and `clean package`, `npm ci`, the frontend's existing 45+ Node tests, Oxlint, and Vite production build. The script checks for the packaged JAR and `frontend/dist/index.html`, reads Surefire XML test counts and writes a dated local summary under **ignored** `release-evidence/`. It does not load local secrets, launch a server, reset the database or send SMTP email. The new `ReleaseApiContractTests` class guards the documented 44 API mappings; the seeded integration test cross-checks the dashboard, report and CSV with deterministic fixtures.
+
+Run the ten manual UAT journeys exactly as recorded in `docs/issue-20-uat-runbook.md`, and record outcomes in the supplied CSV sheets for E2E, Chrome/Edge/responsive/accessibility, and performance. Perform the final MySQL smoke and guarded reset **only** after verifying a disposable database or making a backup. The upload directory must survive reset unchanged. Live Gmail tests require a controlled deliverable email recipient; the synthetic `.test` addresses do not receive real email. Keep `release-evidence/` private: backend test diagnostics may contain synthetic bearer-token examples even if the runner redacts common formats.
+
+**Do not mark Issue 20 closed** until all gates and the operator sign-off in `docs/issue-20-release-checklist.md` pass with no Critical/High defects.
+
+Read-only MySQL schema checks (with the local restricted application account) are documented in `docs/issue-20-mysql-smoke.md` and `scripts/issue-20-readonly-schema.sql`. The latter makes no database changes.

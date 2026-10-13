@@ -17,6 +17,9 @@ backend/data/
 
 # Local database exports and logs
 *.sql
+!scripts/issue-20-readonly-schema.sql
 *.dump
 *.bak
 *.log
+
+/release-evidence/
