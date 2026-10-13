@@ -10,7 +10,10 @@ import { DashboardRedirect, ProtectedRoute, PublicOnlyRoute, RoleRoute } from '.
 import { AppLayout } from './layout/AppLayout'
 import { PublicLayout } from './layout/PublicLayout'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { PlannedFeaturePage } from './pages/PlannedFeaturePage'
+import { AdminDashboardPage } from './admin/AdminDashboardPage'
+import { AdminMonitoringPage } from './admin/AdminMonitoringPage'
+import { AdminRequestDetailPage } from './admin/AdminRequestDetailPage'
+import { AdminReportsPage } from './admin/AdminReportsPage'
 import { NotificationsPage } from './notifications/NotificationsPage'
 import { ProfilePage } from './profile/ProfilePage'
 import { NewStudentRequestPage } from './requests/NewStudentRequestPage'
@@ -52,12 +55,12 @@ function App() {
             </Route>
 
             <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
-              <Route path="/admin/dashboard" element={<PlannedFeaturePage eyebrow="Administration" title="Overview" description="A clear view of request activity and document-delivery progress." issue={17} />} />
+              <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/document-types" element={<AdminDocumentTypesPage />} />
-              <Route path="/admin/requests" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring" description="Monitor document requests without changing staff workflow states." issue={17} />} />
-              <Route path="/admin/requests/:requestId" element={<PlannedFeaturePage eyebrow="Administration" title="Request monitoring detail" description="Review request and student information in a read-only view." issue={17} />} />
-              <Route path="/admin/reports" element={<PlannedFeaturePage eyebrow="Administration" title="Reports" description="Filter request records and export a report as CSV." issue={17} />} />
+              <Route path="/admin/requests" element={<AdminMonitoringPage />} />
+              <Route path="/admin/requests/:requestId" element={<AdminRequestDetailPage />} />
+              <Route path="/admin/reports" element={<AdminReportsPage />} />
             </Route>
           </Route>
         </Route>

@@ -1,0 +1,22 @@
+@import '../staff/staff.css';
+
+.admin-stat-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-stat-card { padding: 1.35rem; min-width: 0; }
+.admin-stat-value { font-size: clamp(1.8rem, 3vw, 2.8rem); font-weight: 800; letter-spacing: -.055em; line-height: 1; margin: .7rem 0; color: var(--ud-ink); font-variant-numeric: tabular-nums; }
+.admin-analytics-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 1rem; }
+.admin-breakdown-row { display: flex; align-items: start; justify-content: space-between; gap: 1.2rem; padding: .85rem 0; border-top: 1px solid var(--ud-border); }
+.admin-breakdown-row strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.admin-recent-row { display: flex; align-items: center; justify-content: space-between; gap: 1.2rem; padding: 1rem 0; border-bottom: 1px solid var(--ud-border); }
+.admin-recent-row:last-child { border-bottom: 0; }
+.admin-attachment-list { padding: 0; margin: 0; list-style: none; }
+.admin-report-table { min-width: 1150px; margin: 0; }
+.admin-report-table th { background: #f8f6f7; font-size: .79rem; font-weight: 750; white-space: nowrap; }
+.admin-report-table td { font-size: .88rem; vertical-align: top; }
+.admin-report-table th, .admin-report-table td { padding: .8rem .65rem; }
+.admin-report-purpose { min-width: 15rem; max-width: 24rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+.admin-report-cell { max-width: 15rem; overflow-wrap: anywhere; }
+.admin-report-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.admin-report-filter-grid .form-label { font-size: .84rem; }
+.admin-report-results .table-responsive { border-radius: .4rem; border: 1px solid var(--ud-border); }
+@media (max-width: 990px) { .admin-stat-grid { grid-template-columns: repeat(2,minmax(0, 1fr)); } .admin-analytics-grid { grid-template-columns: 1fr; } }
+@media (max-width: 610px) { .admin-stat-grid, .admin-report-filter-grid { grid-template-columns: minmax(0, 1fr); } .admin-stat-card { padding: 1rem; } .admin-recent-row { align-items: flex-start; flex-direction: column; gap: .55rem; } }

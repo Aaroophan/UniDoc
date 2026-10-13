@@ -5,7 +5,6 @@ import com.unidoc.auth.SessionRevokedException;
 import com.unidoc.common.api.CommonDtoMapper;
 import com.unidoc.common.api.PageResponse;
 import com.unidoc.common.api.RequestSummary;
-import com.unidoc.common.web.QueryParameters;
 import com.unidoc.file.AttachmentNotFoundException;
 import com.unidoc.file.FileStorageService;
 import com.unidoc.file.PreparedFileDownload;
@@ -22,9 +21,6 @@ import com.unidoc.user.UserRole;
 import com.unidoc.user.UserStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,10 +30,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /** Shared staff work list, detail and explicit, versioned review commands. */
 @Service
@@ -46,6 +40,7 @@ public class StaffRequestService {
 
     private final UserRepository users;
     private final DocumentRequestRepository requests;
+    private final RequestReadQueries listings;
     private final StudentProfileRepository profiles;
     private final RequestAttachmentRepository attachments;
     private final RequestStatusHistoryRepository histories;
@@ -60,9 +55,11 @@ public class StaffRequestService {
                                StudentProfileRepository profiles, RequestAttachmentRepository attachments,
                                RequestStatusHistoryRepository histories, IssuedDocumentRepository issuedDocuments,
                                FileStorageService storage, RequestTransitionValidator transitions,
-                               RequestReviewTransitions reviewTransitions, Validator validator, Clock clock) {
+                               RequestReviewTransitions reviewTransitions, Validator validator, Clock clock,
+                               RequestReadQueries listings) {
         this.users = users;
         this.requests = requests;
+        this.listings = listings;
         this.profiles = profiles;
         this.attachments = attachments;
         this.histories = histories;
@@ -81,31 +78,8 @@ public class StaffRequestService {
                                               LocalDate requiredDate, Integer page, Integer size,
                                               String sort, String direction) {
         requireActiveStaff(staffUserId);
-        if (documentTypeId != null && documentTypeId < 1) {
-            throw new com.unidoc.common.exception.InvalidQueryParameterException(
-                    "documentTypeId must be positive.");
-        }
-        QueryParameters.validateDateRange(submittedFrom, submittedTo);
-        String queryText = QueryParameters.freeText(q, 120);
-        RequestStatus status = QueryParameters.enumValue(rawStatus, RequestStatus.class, "status");
-        DeliveryMethod method = QueryParameters.enumValue(rawDeliveryMethod, DeliveryMethod.class, "deliveryMethod");
-        Pageable pageable = QueryParameters.pageable(page, size, sort, direction,
-                DocumentRequestSortProperties.MAPPINGS, DocumentRequestSortProperties.DEFAULT, Sort.Direction.DESC);
-        // Stable ID tie-breaker when several requests share the same sort value.
-        pageable = org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                pageable.getSort().and(Sort.by(pageable.getSort().iterator().next().getDirection(), "id")));
-        Page<DocumentRequest> matched = requests.findAll(DocumentRequestSpecifications.forStaffOrAdmin(
-                queryText, status, documentTypeId, method, submittedFrom, submittedTo, requiredDate), pageable);
-
-        // Registration number is optional and queried once per page, not once per result row.
-        Set<Long> studentIds = matched.getContent().stream()
-                .map(request -> request.getStudent().getId()).collect(Collectors.toSet());
-        Map<Long, String> registrations = studentIds.isEmpty() ? Map.of()
-                : profiles.findByUserIdIn(studentIds).stream().collect(Collectors.toMap(
-                        profile -> profile.getUser().getId(), StudentProfile::getRegistrationNumber,
-                        (first, ignored) -> first));
-        return PageResponse.from(matched, request -> CommonDtoMapper.toRequestSummary(
-                request, registrations.get(request.getStudent().getId())));
+        return listings.list(q, rawStatus, documentTypeId, rawDeliveryMethod, submittedFrom,
+                submittedTo, requiredDate, page, size, sort, direction);
     }
 
     @Transactional(readOnly = true)

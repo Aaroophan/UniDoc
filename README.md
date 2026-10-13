@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements Issues 1–16 of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student requests and tracking, staff review and additional-information cycles, and **Issue 15 electronic issued-PDF delivery** plus **Issue 16 physical ready-for-collection and staff-recorded completion**. Administrator reporting, deterministic demo data and release completion belong to later issues.
+UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements **Issues 1–17** of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student request tracking, staff review and information cycles, electronic issued-PDF delivery, physical collection, and **Issue 17 administrator monitoring, dashboard, reports, and safe CSV export**. Deterministic demo data and release verification remain in subsequent issues.
 
 
 ## Prerequisites
@@ -140,7 +140,7 @@ After starting MySQL, the Spring Boot API, and Vite using the commands above, op
 - `/login`: students, staff, and administrators sign in using credentials stored in MySQL. Wrong passwords, inactive accounts, and validation failures show safe messages.
 - `/account`: the authenticated user can read public account data and sign out. The session belongs to this browser tab (`sessionStorage`), and a refresh triggers `/api/auth/me` verification.
 - `/dashboard`: redirects to the current role's entry page. All protected routes require authentication; STUDENT, STAFF, and ADMIN route families also have frontend role guards in addition to the backend's security checks.
-- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Document catalogue browsing and administrator document-type management are functional in Issue 8; the student request submission/tracking pages are functional as of Issue 12, while staff workflow and reports retain placeholders; notifications are functional as of Issue 9. The administrator account management page is functional in Issue 7. Those placeholders do not imply the business APIs exist.
+- The `/profile` route now has the functional Issue 6 student profile form, and `/requests/new` checks saved profile completeness. Document catalogue browsing and administrator document-type management are functional in Issue 8; the student request submission/tracking pages are functional as of Issue 12, staff workflow and both delivery methods are functional through Issues 13–16, and administrator monitoring, dashboard and reports are functional as of Issue 17. Notifications are functional as of Issue 9. The administrator account management page is functional in Issue 7.
 
 The frontend API base URL is `VITE_API_BASE_URL` (defaults to `http://localhost:8080`). For a Windows setup, create `frontend/.env.local` with this public value as shown above. Never expose database/JWT/SMTP secrets through `VITE_` variables.
 
@@ -456,3 +456,38 @@ npm run build
 ```
 
 See `docs/issue-16-implementation-checklist.md` for the full acceptance matrix. Java 21 production compilation, strict TypeScript compilation and 34 frontend tests passed in the execution environment. Maven/JUnit, native lint/Vite bundling, MySQL/SMTP and interactive browser checks are pending Windows validation.
+
+
+## Issue 17 - Administrator monitoring, dashboard, request reports and CSV
+
+Issue 17 adds **ADMIN-only, read-only** monitoring and analytics. No new database tables, staff workflow commands, or file access are introduced. The application navigation now links directly to the working dashboard, monitoring, detail and reports pages. All role boundaries are enforced by both Spring Security and domain services; hiding buttons in React is not used as authorization.
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/admin/requests` | Same validated `q`, `status`, `documentTypeId`, `deliveryMethod`, `submittedFrom`, `submittedTo`, `requiredDate`, `page`, `size`, `sort`, `direction` and shared DB-backed list query as staff; no staff actions |
+| `GET /api/admin/requests/{id}` | Student/profile, request snapshots, metadata and permanent history; `availableActions: []`; no file bytes or download URLs |
+| `GET /api/admin/dashboard` | Counts for total, canonical three-state pending, exact approved/processing/rejected/ready/completed, electronic/physical totals, counts by document-type ID **and submission-time name**, and ten newest requests |
+| `GET /api/admin/reports/requests` | Paginated 12-column request report with submitted dates, status, document type, delivery, allowed sort and direction |
+| `GET /api/admin/reports/requests.csv` | All matching rows using the exact same validated filter and sort semantics, **without page/size**; UTF-8, quoted CSV and spreadsheet-formula escaping |
+
+The report contains request number, registration, student name/email, document type snapshot name, purpose, delivery method, required date, status, submitted timestamp (`createdAt`), updated timestamp, and nullable completion timestamp. CSV headers match that order; null values are empty and cells beginning (including after leading whitespace) with `=`, `+`, `-`, or `@` are prefixed with a single quote. The endpoint sends `text/csv; charset=UTF-8`, `Content-Disposition: attachment; filename="unidoc-request-report-YYYY-MM-DD.csv"`, `Cache-Control: no-store` and `nosniff`. Export is an authenticated blob download; no public storage URL or spreadsheet library is used. Filter edits must be **applied** before they change the report or CSV, and CSV always includes all matching rows across the paginated screen.
+
+Dashboard definitions follow `02-requirements-and-scope.md`: pending includes `SUBMITTED`, `UNDER_REVIEW`, and `ADDITIONAL_INFORMATION_REQUIRED` only; approved/processing/rejected/ready/completed are exact statuses. Requests-by-type groups on the immutable name snapshot so renaming a catalogue entry does not rewrite historical analytics. Summary and aggregate queries run at the database, with ten recent requests bounded and normal lists paginated; only intentional CSV export retrieves all matching requests for the academic/demo dataset.
+
+### Issue 17 Windows verification
+
+From the repository root (PowerShell):
+
+```powershell
+.\backend\mvnw.cmd -f backend\pom.xml '-Dtest=AdminInsightsServiceTests,AdminInsightsHttpTests,SafeCsvWriterTests,StaffRequestServiceTests,StaffRequestHttpTests,PhysicalCollectionServiceTests,ElectronicDocumentServiceTests' test
+.\backend\mvnw.cmd -f backend\pom.xml clean test
+.\backend\mvnw.cmd -f backend\pom.xml clean package
+npm --prefix frontend ci
+npm --prefix frontend run test:requests
+npm --prefix frontend run lint
+npm --prefix frontend run build
+```
+
+Sign in as ADMIN and inspect `/admin/dashboard`, `/admin/requests`, `/admin/requests/{id}` and `/admin/reports`. Check combined filtering, back-navigation, loading/empty states, report pagination, and UTF-8 CSV contents against the same filtered records across multiple pages. Ensure an ADMIN cannot call `/api/staff/**` or download issued/supporting documents; verify STAFF/STUDENT cannot call admin endpoints. Check at 360, 768 and 1366 px. See `docs/issue-17-implementation-checklist.md` for complete requirements and acceptance.
+
+**Environment verification:** Backend **production** Java 21 compilation, strict TypeScript compilation, and 39 Node tests passed in the provided Linux sandbox. Maven/JUnit integration tests, MySQL runtime checks, Oxlint and the Vite build still require a Windows test run: the supplied `node_modules` is Windows-native, and Maven/test dependencies cannot be retrieved in this sandbox. Those checks are **not** claimed as passed.

@@ -12,6 +12,7 @@ import { Pagination } from '../components/Pagination'
 import { RequestStatus as RequestStatusBadge } from '../components/RequestStatus'
 import { formatRequestDate, formatRequestTime } from '../requests/requestFormat'
 import { listStaffRequests } from './staffRequestsApi'
+import { listAdminRequests } from '../admin/adminInsightsApi'
 import type { StaffRequestFilters, StaffRequestSort, StaffRequestSummary } from './staffRequestsApi'
 import './staff.css'
 
@@ -46,12 +47,13 @@ function readFilters(params: URLSearchParams): StaffRequestFilters {
   }
 }
 
-function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered }: {
+function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered, mode }: {
   activeTypes: CatalogueDocumentType[]
   selected: StaffRequestFilters
   onApply: (filters: StaffRequestFilters) => void
   onClear: () => void
   isFiltered: boolean
+  mode: 'staff' | 'admin'
 }) {
   const [validation, setValidation] = useState<string | null>(null)
   const selectedId = selected.documentTypeId
@@ -82,9 +84,9 @@ function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered }: {
   }
 
   return (
-    <form className="surface-card request-filters staff-filters" aria-label="Filter staff requests" onSubmit={submit}>
+    <form className="surface-card request-filters staff-filters" aria-label={mode === 'admin' ? 'Filter monitored requests' : 'Filter staff requests'} onSubmit={submit}>
       <div className="request-filters-header">
-        <div><h2 className="h5 mb-1">Find requests</h2><p className="small text-muted mb-0">The same shared work list is visible to every active staff member.</p></div>
+        <div><h2 className="h5 mb-1">Find requests</h2><p className="small text-muted mb-0">{mode === 'admin' ? 'Monitor submitted requests across all students without changing their status.' : 'The same shared work list is visible to every active staff member.'}</p></div>
         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={!isFiltered} onClick={onClear}>Clear all</button>
       </div>
       <div className="staff-filter-grid">
@@ -153,7 +155,7 @@ function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered }: {
   )
 }
 
-export function StaffWorkListPage() {
+export function StaffWorkListPage({ mode = 'staff' }: { mode?: 'staff' | 'admin' } = {}) {
   const location = useLocation()
   const [params, setParams] = useSearchParams()
   const query = params.toString()
@@ -187,7 +189,7 @@ export function StaffWorkListPage() {
       setLoadState('loading')
       setLoadError(null)
       try {
-        const response = await listStaffRequests(filters, controller.signal)
+        const response = await (mode === 'admin' ? listAdminRequests(filters, controller.signal) : listStaffRequests(filters, controller.signal))
         if (controller.signal.aborted) return
         if ((response.totalPages > 0 && response.page >= response.totalPages) ||
             (response.totalPages === 0 && response.page !== 0)) {
@@ -210,7 +212,7 @@ export function StaffWorkListPage() {
     }
     void load()
     return () => controller.abort()
-  }, [filters, reload, setParams])
+  }, [filters, reload, setParams, mode])
 
   function applyFilters(next: StaffRequestFilters) {
     const values = new URLSearchParams()
@@ -235,24 +237,24 @@ export function StaffWorkListPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Staff workspace" title="Request work list"
-        description="Find and review document requests across all students. No assignment or claim step is required."
+      <PageHeader eyebrow={mode === 'admin' ? 'Administration' : 'Staff workspace'} title={mode === 'admin' ? 'Request monitoring' : 'Request work list'}
+        description={mode === 'admin' ? 'Read-only oversight of student requests, delivery progress, and history. Workflow actions remain staff-only.' : 'Find and review document requests across all students. No assignment or claim step is required.'}
         actions={<button type="button" className="btn btn-outline-primary" disabled={loadState === 'loading'} onClick={() => setReload((value) => value + 1)}>Refresh</button>} />
       {catalogueError && <p role="status" className="small text-muted">{catalogueError}</p>}
       <StaffFilters key={filterKey} selected={filters} activeTypes={activeTypes}
-        isFiltered={filtered || safePage(params.get('page')) > 0} onApply={applyFilters} onClear={() => setParams(new URLSearchParams())} />
+        mode={mode} isFiltered={filtered || safePage(params.get('page')) > 0} onApply={applyFilters} onClear={() => setParams(new URLSearchParams())} />
       <section className="surface-card request-results" aria-labelledby="staff-results-title">
         <div className="request-results-header">
-          <div><p className="section-eyebrow mb-2">University requests</p><h2 className="h5 mb-0" id="staff-results-title">Shared work list</h2></div>
+          <div><p className="section-eyebrow mb-2">University requests</p><h2 className="h5 mb-0" id="staff-results-title">{mode === 'admin' ? 'All requests' : 'Shared work list'}</h2></div>
           {results && loadState === 'ready' && <span className="small text-muted">{results.totalItems} matching requests</span>}
         </div>
         {loadState === 'loading' && <PageState status="loading" message="Loading student requests..." />}
-        {loadState === 'error' && <PageState status="error" title="Unable to load the work list"
+        {loadState === 'error' && <PageState status="error" title="Unable to load the request list"
           message={loadError?.message ?? 'Please try again.'} requestId={loadError?.requestId}
           onRetry={() => setReload((value) => value + 1)} />}
         {loadState === 'ready' && results?.items.length === 0 && <PageState status="empty"
           title={filtered ? 'No matching requests' : 'No document requests yet'}
-          message={filtered ? 'Try a different search, status, date, or document type.' : 'Submitted student requests will appear here for every staff member.'}
+          message={filtered ? 'Try a different search, status, date, or document type.' : 'Submitted student requests will appear here.'}
           action={filtered ? <button type="button" className="btn btn-outline-primary" onClick={() => setParams(new URLSearchParams())}>Clear filters</button> : undefined} />}
         {loadState === 'ready' && results && results.items.length > 0 && <>
           <div className="request-results-list">
@@ -270,8 +272,8 @@ export function StaffWorkListPage() {
                 <div><span className="request-fact-label">Submitted</span><strong>{formatRequestTime(item.createdAt)}</strong></div>
                 <div><span className="request-fact-label">Updated</span><strong>{formatRequestTime(item.updatedAt)}</strong></div>
               </div>
-              <Link className="btn btn-outline-primary btn-sm request-result-action" to={`/staff/requests/${item.id}`}
-                state={{ from: location.pathname + location.search }} aria-label={`Review request ${item.requestNumber}`}>View details</Link>
+              <Link className="btn btn-outline-primary btn-sm request-result-action" to={`${mode === 'admin' ? '/admin' : '/staff'}/requests/${item.id}`}
+                state={{ from: location.pathname + location.search }} aria-label={`${mode === 'admin' ? 'Monitor' : 'Review'} request ${item.requestNumber}`}>View details</Link>
             </article>)}
           </div>
           <div className="request-results-pagination"><Pagination page={results} onPageChange={pageTo} /></div>

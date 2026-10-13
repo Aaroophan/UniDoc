@@ -40,12 +40,12 @@ public interface DocumentRequestRepository
     @Query("""
             select new com.unidoc.request.query.DocumentTypeRequestCount(
                 request.documentType.id,
-                request.documentType.name,
+                request.documentTypeNameSnapshot,
                 count(request)
             )
             from DocumentRequest request
-            group by request.documentType.id, request.documentType.name
-            order by count(request) desc, request.documentType.name asc
+            group by request.documentType.id, request.documentTypeNameSnapshot
+            order by count(request) desc, request.documentTypeNameSnapshot asc
             """)
     List<DocumentTypeRequestCount> countGroupedByDocumentType();
 }
