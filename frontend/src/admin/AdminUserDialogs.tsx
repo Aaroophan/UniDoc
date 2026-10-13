@@ -5,6 +5,7 @@ import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { normalizeEmail } from '../auth/validation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FeedbackBanner } from '../components/FeedbackBanner'
+import { focusFirstInvalidField } from '../components/formFocus'
 import { changeManagedAccountStatus, createManagedAccount, resetManagedAccountPassword } from './adminUsersApi'
 import { validateManagedAccount, validatePasswordReset } from './adminUsersValidation'
 import type { CreateAccountForm, PasswordResetForm } from './adminUsersValidation'
@@ -13,7 +14,7 @@ type Alert = { message: string; requestId?: string | null; warning?: boolean }
 
 function focusInvalid(form: HTMLFormElement | null, errors: FieldErrors, fields: string[]) {
   const first = fields.find((field) => errors[field])
-  if (first) (form?.elements.namedItem(first) as HTMLElement | null)?.focus()
+  if (first) focusFirstInvalidField(form, [first])
 }
 
 interface InputFieldProps {

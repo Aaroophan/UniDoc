@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { PageResponse, UserRole, UserStatus, UserSummary } from '../api/contracts'
@@ -17,7 +17,7 @@ import type { UserFilters } from './adminUsersApi'
 type SortColumn = NonNullable<UserFilters['sort']>
 type SortDirection = NonNullable<UserFilters['direction']>
 type Filters = { q: string; role: UserRole | ''; status: UserStatus | ''; sort: SortColumn; direction: SortDirection }
-type LoadState = 'loading' | 'error' | 'ready'
+type LoadState = 'loading' | 'error' | 'ready' | 'refreshing' | 'stale'
 type Message = { variant: FeedbackVariant; text: string; requestId?: string | null }
 type Dialog = { action: 'status' | 'reset'; user: UserSummary } | null
 
@@ -67,11 +67,14 @@ export function AdminUsersPage() {
   const [feedback, setFeedback] = useState<Message | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const loadedKey = useRef<string | null>(null)
+  const viewKey = JSON.stringify([filters, page])
 
   useEffect(() => {
     const controller = new AbortController()
     async function fetchUsers() {
-      setLoadState('loading')
+      const sameResults = loadedKey.current === viewKey
+      setLoadState(sameResults ? 'refreshing' : 'loading')
       setLoadError(null)
       try {
         const data = await listAdminUsers({ ...filters, page, size: 20 }, controller.signal)
@@ -81,18 +84,19 @@ export function AdminUsersPage() {
             return
           }
           setResults(data)
+          loadedKey.current = viewKey
           setLoadState('ready')
         }
       } catch (error: unknown) {
         if (!controller.signal.aborted) {
           setLoadError({ message: getSafeErrorMessage(error, 'Unable to load accounts.'), requestId: getApiError(error)?.requestId })
-          setLoadState('error')
+          setLoadState(sameResults ? 'stale' : 'error')
         }
       }
     }
     void fetchUsers()
     return () => controller.abort()
-  }, [filters, page, reload])
+  }, [filters, page, reload, viewKey])
 
   function changeFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((old) => ({ ...old, [key]: value }))
@@ -190,13 +194,15 @@ export function AdminUsersPage() {
         <div className="admin-users-results-heading">
           <div>
             <h2 className="h5 mb-1" id="admin-users-results-heading">Accounts</h2>
-            <p className="small text-muted mb-0">{loadState === 'ready' && results ? `${results.totalItems} matching account${results.totalItems === 1 ? '' : 's'}` : 'Current university accounts'}</p>
+            <p className="small text-muted mb-0">{(loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && results ? `${results.totalItems} matching account${results.totalItems === 1 ? '' : 's'}` : 'Current university accounts'}</p>
           </div>
-          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={loadState === 'loading'} onClick={refreshList}>Refresh</button>
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={loadState === 'loading' || loadState === 'refreshing'} onClick={refreshList}>Refresh</button>
         </div>
         {loadState === 'loading' && <div className="admin-users-result-content"><PageState status="loading" message="Loading accounts..." /></div>}
+        {loadState === 'refreshing' && <p role="status" className="small text-muted px-4 mt-3 mb-0">Updating account list…</p>}
+        {loadState === 'stale' && <div role="alert" className="px-4 mt-3"><p className="request-inline-error">Unable to refresh accounts. The previous list remains visible. {loadError?.message}</p><button className="btn btn-outline-primary btn-sm" onClick={refreshList}>Try again</button></div>}
         {loadState === 'error' && <div className="admin-users-result-content"><PageState status="error" message={loadError?.message ?? 'Unable to load accounts.'} requestId={loadError?.requestId} onRetry={refreshList} /></div>}
-        {loadState === 'ready' && results && results.items.length === 0 && (
+        {(loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && results && results.items.length === 0 && (
           <div className="admin-users-result-content">
             <PageState status="empty" title={filtered ? 'No matching accounts' : 'No accounts available'}
               message={filtered ? 'Try clearing or changing the filters to find another account.' : 'Create a staff or administrator account to begin.'}
@@ -204,7 +210,7 @@ export function AdminUsersPage() {
                 <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>Create account</button>} />
           </div>
         )}
-        {loadState === 'ready' && results && results.items.length > 0 && (
+        {(loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && results && results.items.length > 0 && (
           <>
             <div className="admin-users-table-wrap d-none d-lg-block">
               <table className="table admin-users-table mb-0">

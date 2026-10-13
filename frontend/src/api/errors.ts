@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { ApiErrorResponse, FieldErrors } from './contracts'
 import { isRecord } from './contracts'
+import { networkRecoveryMessage, recoveryMessageForApi } from './recoveryMessages'
 
 function isFieldErrors(value: unknown): value is FieldErrors {
   return isRecord(value) && Object.values(value).every((message) => typeof message === 'string')
@@ -30,9 +31,9 @@ export function getApiError(error: unknown): ApiErrorResponse | null {
 
 export function getSafeErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
   const apiError = getApiError(error)
-  if (apiError) return apiError.message
+  if (apiError) return recoveryMessageForApi(apiError.status, apiError.code) ?? apiError.message
   if (axios.isAxiosError(error) && !error.response) {
-    return 'Unable to reach UniDoc. Check your connection and try again.'
+    return networkRecoveryMessage(error.config?.method)
   }
   return fallback
 }

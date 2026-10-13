@@ -336,3 +336,81 @@ a:hover { color: var(--ud-maroon-dark); }
   .admin-users-pagination { padding: 0 .8rem; }
   .admin-user-actions .btn { padding: .5rem .7rem; }
 }
+
+/* Issue 18: the same restrained semantic palette and focus cues on every route. */
+:root {
+  --ud-success: #216443;
+  --ud-warning: #805710;
+  --ud-danger: #a32630;
+  --ud-info: #335a80;
+  --ud-focus-bg: #fffaf5;
+  --ud-shadow: 0 .45rem 1.5rem rgb(42 23 27 / 4%);
+}
+html { scroll-padding-top: 5.2rem; }
+body, #root, .app-shell { max-width: 100%; }
+:where(p, dd, h1, h2, h3, h4, h5, h6, a, strong) { overflow-wrap: anywhere; }
+:where(.surface-card, .page-header, .request-result-row, .app-main-inner) { min-width: 0; }
+.form-select { min-height: 3rem; border-radius: .5rem; border-color: #d8d4d7; }
+.form-select:focus, .form-check-input:focus { border-color: var(--ud-maroon); box-shadow: 0 0 0 .22rem rgb(151 0 0 / 14%); }
+.form-check-input:checked { background-color: var(--ud-maroon); border-color: var(--ud-maroon); }
+.btn-link { --bs-btn-color: var(--ud-maroon); --bs-btn-hover-color: var(--ud-maroon-dark); }
+:where(a, button, select, textarea, input, [tabindex="0"]):focus-visible {
+  outline: 3px solid var(--ud-ring);
+  outline-offset: 3px;
+}
+:where(.request-file-input, .table-responsive, .admin-report-table) { max-width: 100%; }
+.table-responsive:focus-visible { outline-offset: -3px; }
+.table-responsive > table { margin-bottom: 0; }
+.request-status { gap: .5rem; white-space: normal; line-height: 1.35; }
+.request-status-icon { display: inline-grid; place-items: center; width: .9rem; height: .9rem; flex: 0 0 auto; font-weight: 800; font-size: .9rem; }
+.request-status-neutral { background: #f4f3f4; color: #514c55; }
+.request-status-information { background: #edf3f9; color: #2c587e; }
+.request-status-success { background: #e8f5ed; color: #1e6141; }
+.request-status-warning { background: #fff5e4; color: #815810; }
+.request-status-danger { background: #fff0ef; color: #972329; }
+.page-actions { flex: 0 1 auto; min-width: 0; }
+.page-actions > *, .confirm-dialog-actions > * { max-width: 100%; }
+.feedback-dismiss { min-width: 2.5rem; min-height: 2.5rem; flex-shrink: 0; }
+.pagination-shell [aria-current="page"] { font-weight: 650; }
+.confirm-dialog { width: min(calc(100vw - 2rem), 36rem); max-width: calc(100vw - 2rem); max-height: min(90dvh, 48rem); overscroll-behavior: contain; }
+.confirm-dialog-inner { min-width: 0; overflow-wrap: anywhere; }
+.confirm-dialog .form-field { min-width: 0; }
+.confirm-dialog .form-control, .confirm-dialog .form-select { width: 100%; min-width: 0; }
+
+@media (max-width: 900px) {
+  .app-sidebar.is-open { max-height: min(70dvh, 40rem); overflow-y: auto; overscroll-behavior: contain; }
+  .side-nav-link, .mobile-nav-sign-out { min-height: 2.8rem; }
+}
+@media (max-width: 650px) {
+  .topbar-inner { min-width: 0; }
+  .brand { flex: 0 1 auto; }
+  .brand-name-block { min-width: 0; }
+  .brand-name { font-size: clamp(1.12rem, 5vw, 1.4rem); }
+  .brand-subtitle { font-size: .62rem; }
+  .menu-toggle, .mobile-account-link { flex-shrink: 0; min-width: 2.75rem; min-height: 2.75rem; }
+  .page-actions { width: 100%; }
+  .page-actions > .btn { flex: 1 1 auto; }
+  .request-results-header, .request-filters-header { flex-wrap: wrap; }
+  .request-status-panel-head { gap: 1rem; }
+  .confirm-dialog-actions { display: grid !important; grid-template-columns: minmax(0, 1fr); }
+  .confirm-dialog-actions > .btn { width: 100%; }
+  .pagination-shell > div { flex-wrap: wrap; justify-content: center; }
+  .pagination-shell .btn { min-height: 2.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner-border { animation: none !important; border-right-color: transparent; }
+}
+
+/* Touch interaction never depends on tiny badge-sized actions. */
+@media (pointer: coarse) {
+  .btn, .btn-sm, .form-check-input, .topbar-sign-out, .feedback-dismiss { min-height: 2.75rem; }
+  .form-check-input { min-width: 1.35rem; min-height: 1.35rem; }
+  .form-check-label { padding-block: .15rem; }
+}
+@media (max-width: 430px) {
+  .auth-form-pane, .app-main-inner { min-width: 0; }
+  .request-results-pagination { padding-inline: .8rem; }
+  .request-filters, .request-detail-section, .request-aside-card { overflow-wrap: anywhere; }
+  .page-state { min-height: 11rem; padding: 1.5rem .85rem; }
+  .feedback-banner { gap: .6rem !important; }
+}

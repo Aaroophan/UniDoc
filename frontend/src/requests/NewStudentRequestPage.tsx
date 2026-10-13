@@ -8,6 +8,7 @@ import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { getActiveDocumentType } from '../catalogue/documentTypesApi'
 import type { CatalogueDocumentType } from '../catalogue/documentTypesApi'
 import { FeedbackBanner } from '../components/FeedbackBanner'
+import { focusFirstInvalidField } from '../components/formFocus'
 import { PageHeader } from '../components/PageHeader'
 import { PageState } from '../components/PageState'
 import { getStudentProfile, hasCompleteStudentProfile } from '../profile/profileApi'
@@ -60,6 +61,7 @@ function NewStudentRequestForm({ typeId }: { typeId: number | null }) {
   const [outcomeUnknown, setOutcomeUnknown] = useState(false)
   const [today, setToday] = useState(localToday)
   const fileInput = useRef<HTMLInputElement | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const submissionLock = useRef(false)
 
   useEffect(() => {
@@ -142,7 +144,10 @@ function NewStudentRequestForm({ typeId }: { typeId: number | null }) {
     if (!deliveryMethod) nextErrors.deliveryMethod = 'Choose a delivery method.'
     setErrors(nextErrors)
     setFeedback(null)
-    if (Object.keys(nextErrors).length) return
+    if (Object.keys(nextErrors).length) {
+      focusFirstInvalidField(formRef.current)
+      return
+    }
 
     // A ref protects against two same-tick submissions before React commits disabled state.
     submissionLock.current = true
@@ -178,6 +183,7 @@ function NewStudentRequestForm({ typeId }: { typeId: number | null }) {
           case 'INVALID_REQUIRED_DATE': newErrors.requiredDate = 'Choose today or a future date.'; break
         }
         setErrors((current) => ({ ...current, ...newErrors }))
+        if (Object.keys(newErrors).length) focusFirstInvalidField(formRef.current)
         setFeedback({ variant: 'error', message: getSafeErrorMessage(failure, 'Unable to submit the request.'), requestId: apiError?.requestId })
       }
     } finally {
@@ -251,7 +257,7 @@ function NewStudentRequestForm({ typeId }: { typeId: number | null }) {
                 <h2 className="h4 mb-1" id="request-form-heading">Request details</h2>
                 <p className="text-muted mb-0 small">Fields marked with * are required.</p>
               </div>
-              <form className="request-form" onSubmit={(event) => { void onSubmit(event) }} noValidate>
+              <form ref={formRef} className="request-form" onSubmit={(event) => { void onSubmit(event) }} noValidate>
                 {feedback && <div className="mb-4"><FeedbackBanner variant={feedback.variant} message={feedback.message} requestId={feedback.requestId} onDismiss={() => setFeedback(null)} /></div>}
                 {outcomeUnknown && (
                   <div className="request-uncertain" role="alert">

@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { FeedbackBanner } from '../components/FeedbackBanner'
+import { focusFirstInvalidField } from '../components/formFocus'
 import { useNotificationCount } from '../notifications/NotificationCountContext'
 import { formatFileSize } from './requestFormat'
 import { getStudentRequest, submitStudentInformationResponse } from './requestsApi'
@@ -26,6 +27,7 @@ export function StudentInformationResponseForm({ details, onUpdate }: {
   const [outcomeUnknown, setOutcomeUnknown] = useState(false)
   const [checking, setChecking] = useState(false)
   const uploadInput = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const submittingLock = useRef(false)
 
   function onFilesSelected(event: ChangeEvent<HTMLInputElement>) {
@@ -68,7 +70,10 @@ export function StudentInformationResponseForm({ details, onUpdate }: {
     setMessageError(invalidMessage)
     setFilesError(invalidFiles)
     setFeedback(null)
-    if (invalidMessage || invalidFiles) return
+    if (invalidMessage || invalidFiles) {
+      focusFirstInvalidField(formRef.current, invalidMessage ? ['message'] : ['files'])
+      return
+    }
     submittingLock.current = true
     setSubmitting(true)
     try {
@@ -100,6 +105,7 @@ export function StudentInformationResponseForm({ details, onUpdate }: {
           api?.code === 'FILE_COUNT_EXCEEDED' ? 'Choose no more than three files.' :
           api?.code === 'UNSUPPORTED_FILE_TYPE' || api?.code === 'FILE_EMPTY'
             ? 'The selected file was rejected. Use a non-empty PDF, JPG, or PNG.' : null))
+        focusFirstInvalidField(formRef.current)
         setFeedback({ variant: 'error', message: getSafeErrorMessage(failure, 'Unable to submit your response.'), requestId: api?.requestId })
       }
     } finally {
@@ -126,10 +132,10 @@ export function StudentInformationResponseForm({ details, onUpdate }: {
     <p className="section-eyebrow mb-2">Action required</p>
     <h2 className="h5 mb-2" id="information-response-title">Respond to the information request</h2>
     <p className="request-callout-intro">Write a response to the staff message above. You may also attach up to three PDF, JPG, or PNG files (5 MiB each). Your original request details cannot be edited.</p>
-    <form onSubmit={(event) => void onSubmit(event)} noValidate>
+    <form ref={formRef} onSubmit={(event) => void onSubmit(event)} noValidate>
       <div className="mb-3">
         <label className="form-label fw-semibold" htmlFor="additional-response-message">Your response <span aria-hidden="true">*</span></label>
-        <textarea id="additional-response-message" className={`form-control ${messageError ? 'is-invalid' : ''}`}
+        <textarea id="additional-response-message" name="message" className={`form-control ${messageError ? 'is-invalid' : ''}`}
           rows={5} minLength={2} maxLength={2000} value={message}
           onChange={(event) => { setMessage(event.target.value); setMessageError(null) }}
           aria-required="true" aria-invalid={Boolean(messageError)} aria-describedby="information-response-message-help information-response-message-error"
@@ -139,7 +145,7 @@ export function StudentInformationResponseForm({ details, onUpdate }: {
       </div>
       <div className="mb-3">
         <label className="form-label fw-semibold" htmlFor="additional-response-files">Additional documents (optional)</label>
-        <input ref={uploadInput} id="additional-response-files" type="file" className={`form-control ${filesError ? 'is-invalid' : ''}`}
+        <input ref={uploadInput} id="additional-response-files" name="files" type="file" className={`form-control ${filesError ? 'is-invalid' : ''}`}
           accept=".pdf,.jpg,.jpeg,.png" multiple onChange={onFilesSelected}
           aria-invalid={Boolean(filesError)} aria-describedby="information-response-file-help information-response-file-error"
           disabled={submitting || checking || outcomeUnknown} />

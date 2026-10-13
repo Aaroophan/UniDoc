@@ -19,16 +19,21 @@ export function AdminRequestDetailPage() {
     ? location.state.from : null
   const backPath = typeof originatingPath === 'string' && /^\/admin\/requests(?:\?[^#]*)?$/.test(originatingPath)
     ? originatingPath : '/admin/requests'
+  const [reload, setReload] = useState(0)
+  return <AdminRequestDetailView key={`${id ?? 'invalid'}-${reload}`} id={id} backPath={backPath}
+    onRefresh={() => setReload((n) => n + 1)} />
+}
+
+function AdminRequestDetailView({ id, backPath, onRefresh }: {
+  id: number | null; backPath: string; onRefresh: () => void
+}) {
   const [data, setData] = useState<AdminRequestDetail | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'not-found'>('loading')
   const [error, setError] = useState<{ message: string; requestId?: string | null } | null>(null)
-  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     if (id === null) return
     const controller = new AbortController()
-    setState('loading')
-    setData(null)
     getAdminRequest(id, controller.signal).then((details) => {
       if (!controller.signal.aborted) { setData(details); setState('ready') }
     }).catch((failure: unknown) => {
@@ -41,20 +46,20 @@ export function AdminRequestDetailPage() {
       }
     })
     return () => controller.abort()
-  }, [id, reload])
+  }, [id])
 
   return <>
     <PageHeader eyebrow="Administration · monitoring" title={data?.requestNumber ?? 'Request details'}
       description="Read-only request, student, document metadata and permanent workflow history. Administrator monitoring does not grant file access or staff actions."
       actions={<div className="d-flex flex-wrap gap-2">
         <Link className="btn btn-outline-secondary" to={backPath}>Back to monitoring</Link>
-        {id !== null && <button className="btn btn-outline-primary" type="button" onClick={() => { setState('loading'); setReload((n) => n + 1) }}>Refresh</button>}
+        {id !== null && <button className="btn btn-outline-primary" type="button" onClick={onRefresh}>Refresh</button>}
       </div>} />
     {(id === null || state === 'not-found') && <PageState status="empty" title="Request not found" message="No request is available at this address."
       action={<Link to="/admin/requests" className="btn btn-primary">Return to monitoring</Link>} />}
     {id !== null && state === 'loading' && <PageState status="loading" message="Loading monitoring details..." />}
     {id !== null && state === 'error' && <PageState status="error" title="Unable to load request"
-      message={error?.message ?? 'Please try again.'} requestId={error?.requestId} onRetry={() => { setState('loading'); setReload((n) => n + 1) }} />}
+      message={error?.message ?? 'Please try again.'} requestId={error?.requestId} onRetry={onRefresh} />}
     {id !== null && state === 'ready' && data && <>
       <section className="surface-card request-status-panel" aria-labelledby="admin-status-heading">
         <div className="request-status-panel-head"><div>

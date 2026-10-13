@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import type { UserRole } from '../api/contracts'
 import { ROLE_LABELS } from '../api/contracts'
@@ -57,8 +57,28 @@ export function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [openAtPath, setOpenAtPath] = useState<string | null>(null)
+  const menuButton = useRef<HTMLButtonElement>(null)
+  const navigation = useRef<HTMLElement>(null)
+  const main = useRef<HTMLElement>(null)
   const notificationCount = useNotificationCountState(user?.id ?? null)
   const navOpen = openAtPath === location.pathname
+
+  useEffect(() => {
+    // Route navigation is announced without moving focus to a hidden sidebar.
+    main.current?.focus({ preventScroll: true })
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!navOpen) return
+    function escapeMenu(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      setOpenAtPath(null)
+      menuButton.current?.focus()
+    }
+    document.addEventListener('keydown', escapeMenu)
+    return () => document.removeEventListener('keydown', escapeMenu)
+  }, [navOpen])
+
   if (!user) return null // ProtectedRoute is the authoritative UI guard.
 
   function signOut() {
@@ -74,12 +94,17 @@ export function AppLayout() {
       <header className="app-topbar">
         <div className="topbar-inner">
           <button
+            ref={menuButton}
             type="button"
             className="menu-toggle"
             aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
             aria-controls="primary-navigation"
             aria-expanded={navOpen}
-            onClick={() => setOpenAtPath((current) => current === location.pathname ? null : location.pathname)}
+            onClick={() => {
+              if (navOpen) { setOpenAtPath(null); return }
+              setOpenAtPath(location.pathname)
+              requestAnimationFrame(() => navigation.current?.querySelector<HTMLElement>('a')?.focus())
+            }}
           >
             <span aria-hidden="true" className="menu-lines">☰</span>
           </button>
@@ -95,7 +120,7 @@ export function AppLayout() {
         </div>
       </header>
       <div className="app-body">
-        <aside className={`app-sidebar${navOpen ? ' is-open' : ''}`} id="primary-navigation">
+        <aside ref={navigation} className={`app-sidebar${navOpen ? ' is-open' : ''}`} id="primary-navigation">
           <div className="sidebar-body">
             <p className="sidebar-section-label">{roleName} workspace</p>
             <nav className="side-nav" aria-label="Main navigation">
@@ -124,7 +149,7 @@ export function AppLayout() {
               <span className="content-breadcrumb-separator" aria-hidden="true">/</span>
               <span>{roleName} workspace</span>
             </div>
-            <main id="main-content" tabIndex={-1} className="app-content"><Outlet /></main>
+            <main ref={main} id="main-content" tabIndex={-1} className="app-content"><Outlet /></main>
           </div>
           <footer className="app-footer d-flex flex-wrap justify-content-between gap-2">
             <span>UniDoc · University Document Request Management System</span>

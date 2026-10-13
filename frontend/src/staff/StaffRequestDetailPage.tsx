@@ -99,7 +99,11 @@ function StaffRequestDetail({ id }: { id: number | null }) {
     const text = decisionText.trim()
     if (action === 'REQUEST_INFORMATION' || action === 'REJECT') {
       const invalid = validateReviewText(text, action === 'REJECT' ? 'rejection' : 'information-request')
-      if (invalid) { setDecisionError(invalid); return }
+      if (invalid) {
+        setDecisionError(invalid)
+        requestAnimationFrame(() => document.getElementById('staff-decision-text')?.focus())
+        return
+      }
     }
     setDecisionError(null)
     const command = (requestId: number, version: number) => {
@@ -112,6 +116,9 @@ function StaffRequestDetail({ id }: { id: number | null }) {
       }
     }
     const succeeded = await run(action, details.version, command)
+    if (!succeeded && (action === 'REQUEST_INFORMATION' || action === 'REJECT')) {
+      requestAnimationFrame(() => document.getElementById('staff-decision-text')?.focus())
+    }
     if (succeeded) {
       setDialogAction(null)
       setDecisionText('')

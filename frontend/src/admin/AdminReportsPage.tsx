@@ -6,6 +6,7 @@ import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { listAdminDocumentTypes } from '../catalogue/documentTypesApi'
 import type { AdminDocumentType } from '../catalogue/documentTypesApi'
 import { PageHeader } from '../components/PageHeader'
+import { focusFirstInvalidField } from '../components/formFocus'
 import { PageState } from '../components/PageState'
 import { Pagination } from '../components/Pagination'
 import { RequestStatus as RequestStatusBadge } from '../components/RequestStatus'
@@ -16,16 +17,16 @@ import type { RequestReportFilters, RequestReportRow, RequestReportSort } from '
 import { appliedReportUrl, readReportFilters } from './reportFilters'
 import './adminInsights.css'
 
-type LoadState = 'loading' | 'error' | 'ready'
+type LoadState = 'loading' | 'error' | 'ready' | 'refreshing' | 'stale'
 
-function ReportForm({ applied, documentTypes, onApply, onClear, filtered }: {
+function ReportForm({ applied, documentTypes, onApply, onClear }: {
   applied: RequestReportFilters
   documentTypes: AdminDocumentType[]
   onApply: (filters: RequestReportFilters) => void
   onClear: () => void
-  filtered: boolean
 }) {
   const [validation, setValidation] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const missingType = applied.documentTypeId && !documentTypes.some((type) => type.id === applied.documentTypeId)
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -35,6 +36,7 @@ function ReportForm({ applied, documentTypes, onApply, onClear, filtered }: {
     const to = get('submittedTo')
     if (from && to && from > to) {
       setValidation('The submitted-from date cannot be later than the submitted-to date.')
+      focusFirstInvalidField(event.currentTarget, ['submittedTo'])
       return
     }
     setValidation(null)
@@ -47,16 +49,16 @@ function ReportForm({ applied, documentTypes, onApply, onClear, filtered }: {
       direction: get('direction') as 'asc' | 'desc',
     })
   }
-  return <form className="surface-card request-filters staff-filters" aria-label="Filter administrator report" onSubmit={submit}>
+  return <form ref={formRef} className="surface-card request-filters staff-filters" aria-label="Filter administrator report" onSubmit={submit}>
     <div className="request-filters-header"><div>
       <h2 className="h5 mb-1">Report filters</h2>
       <p className="small text-muted mb-0">Dates refer to when the request was submitted. Apply filters before exporting.</p>
-    </div><button className="btn btn-outline-secondary btn-sm" type="button" onClick={onClear} disabled={!filtered}>Clear all</button></div>
+    </div><button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => { setValidation(null); formRef.current?.reset(); onClear() }}>Clear all</button></div>
     <div className="admin-report-filter-grid">
       <div><label className="form-label" htmlFor="report-from">Submitted from (inclusive)</label>
         <input className="form-control" id="report-from" name="submittedFrom" type="date" defaultValue={applied.submittedFrom ?? ''} /></div>
       <div><label className="form-label" htmlFor="report-to">Submitted to (inclusive)</label>
-        <input className="form-control" id="report-to" name="submittedTo" type="date" defaultValue={applied.submittedTo ?? ''} /></div>
+        <input className="form-control" id="report-to" name="submittedTo" type="date" aria-invalid={Boolean(validation)} aria-describedby={validation ? 'report-date-error' : undefined} defaultValue={applied.submittedTo ?? ''} /></div>
       <div><label className="form-label" htmlFor="report-status">Status</label>
         <select className="form-select" id="report-status" name="status" defaultValue={applied.status ?? ''}>
           <option value="">All statuses</option>
@@ -88,7 +90,7 @@ function ReportForm({ applied, documentTypes, onApply, onClear, filtered }: {
           <option value="desc">Descending</option><option value="asc">Ascending</option>
         </select></div>
     </div>
-    {validation && <p role="alert" className="request-inline-error mt-3">{validation}</p>}
+    {validation && <p role="alert" id="report-date-error" className="request-inline-error mt-3">{validation}</p>}
     <div className="d-flex justify-content-end mt-3"><button className="btn btn-primary" type="submit">Apply filters</button></div>
   </form>
 }
@@ -127,6 +129,7 @@ export function AdminReportsPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<{ message: string; requestId?: string | null } | null>(null)
   const [reload, setReload] = useState(0)
+  const loadedKey = useRef<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const exportLock = useRef(false)
@@ -155,7 +158,8 @@ export function AdminReportsPage() {
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
-      setState('loading')
+      const sameResults = loadedKey.current === query
+      setState(sameResults ? 'refreshing' : 'loading')
       setError(null)
       try {
         const page = await listRequestReport(applied, controller.signal)
@@ -165,16 +169,17 @@ export function AdminReportsPage() {
           return
         }
         setResult(page)
+        loadedKey.current = query
         setState('ready')
       } catch (failure: unknown) {
         if (controller.signal.aborted) return
         setError({ message: getSafeErrorMessage(failure, 'Unable to load report.'), requestId: getApiError(failure)?.requestId })
-        setState('error')
+        setState(sameResults ? 'stale' : 'error')
       }
     }
     void load()
     return () => controller.abort()
-  }, [applied, reload, setParams])
+  }, [applied, reload, setParams, query])
 
   function applyFilters(next: RequestReportFilters) {
     const nextUrl = appliedReportUrl(next)
@@ -206,24 +211,26 @@ export function AdminReportsPage() {
   return <>
     <PageHeader eyebrow="Administration" title="Request reports"
       description="Filter submitted requests and export all matching rows as a safe UTF-8 CSV file, independent of the current page."
-      actions={<button type="button" className="btn btn-primary" disabled={exporting || state === 'loading' || state === 'error'}
+      actions={<button type="button" className="btn btn-primary" disabled={exporting || state === 'loading' || state === 'refreshing' || state === 'error'}
         onClick={() => void exportCsv()}>{exporting ? 'Preparing CSV...' : 'Export CSV'}</button>} />
     {typesError && <p role="status" className="small text-muted">{typesError}</p>}
     {exportError && <p role="alert" className="request-inline-error mb-3">{exportError}</p>}
-    <ReportForm key={formKey} applied={applied} documentTypes={types} filtered={filtered}
+    <ReportForm key={formKey} applied={applied} documentTypes={types}
       onApply={applyFilters} onClear={() => applyFilters({})} />
     <section className="surface-card request-results admin-report-results" aria-labelledby="report-results-heading">
       <div className="request-results-header"><div><p className="section-eyebrow mb-2">Request report</p>
         <h2 id="report-results-heading" className="h5 mb-0">Filtered results</h2></div>
-        {result && state === 'ready' && <span className="small text-muted">{result.totalItems} matching requests</span>}
+        {result && (state === 'ready' || state === 'refreshing' || state === 'stale') && <span className="small text-muted">{result.totalItems} matching requests</span>}
       </div>
       {state === 'loading' && <PageState status="loading" message="Loading report rows..." />}
+      {state === 'refreshing' && <p role="status" className="small text-muted px-4 pt-3 mb-0">Updating report…</p>}
+      {state === 'stale' && <div className="px-4 pt-3" role="alert"><p className="request-inline-error">Unable to refresh. Previous report results remain visible. {error?.message}</p><button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setReload((n) => n + 1)}>Try again</button></div>}
       {state === 'error' && <PageState status="error" title="Unable to load report" message={error?.message ?? 'Please retry.'}
         requestId={error?.requestId} onRetry={() => setReload((n) => n + 1)} />}
-      {state === 'ready' && result?.items.length === 0 && <PageState status="empty"
+      {(state === 'ready' || state === 'refreshing' || state === 'stale') && result?.items.length === 0 && <PageState status="empty"
         title={filtered ? 'No matching requests' : 'No requests recorded'}
         message={filtered ? 'Adjust or clear your filters. CSV export will still produce a header row.' : 'Request reports become available when students submit requests.'} />}
-      {state === 'ready' && result && result.items.length > 0 && <>
+      {(state === 'ready' || state === 'refreshing' || state === 'stale') && result && result.items.length > 0 && <>
         <div className="p-3"><ReportTable rows={result.items} /></div>
         <div className="request-results-pagination"><Pagination page={result} onPageChange={pageTo} /></div>
       </>}

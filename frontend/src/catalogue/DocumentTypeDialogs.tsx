@@ -4,6 +4,7 @@ import type { FieldErrors } from '../api/contracts'
 import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FeedbackBanner } from '../components/FeedbackBanner'
+import { focusFirstInvalidField } from '../components/formFocus'
 import { changeDocumentTypeStatus, createDocumentType, updateDocumentType } from './documentTypesApi'
 import type { AdminDocumentType } from './documentTypesApi'
 import { asForm, BLANK_DOCUMENT_TYPE, toPayload, validateDocumentType } from './documentTypesValidation'
@@ -15,7 +16,7 @@ type TextField = 'code' | 'name' | 'description' | 'requirements' | 'collectionL
 function focusInvalid(form: HTMLFormElement | null, errors: FieldErrors) {
   const first = ['code', 'name', 'description', 'requirements', 'electronicAvailable', 'collectionLocation', 'collectionInstructions']
     .find((field) => Boolean(errors[field]))
-  if (first) (form?.elements.namedItem(first) as HTMLElement | null)?.focus()
+  if (first) focusFirstInvalidField(form, [first])
 }
 
 function TextInput({ name, label, value, onChange, error, multiline = false, maxLength, optional = false, disabled }: {

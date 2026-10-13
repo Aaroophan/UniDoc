@@ -50,7 +50,10 @@ export function StaffPhysicalCollectionActions({ details, busy, needsRefresh, fi
       const invalidNote = validateCollectionNote(note)
       setDateError(invalidDate)
       setNoteError(invalidNote)
-      if (invalidDate || invalidNote) return
+      if (invalidDate || invalidNote) {
+        requestAnimationFrame(() => document.getElementById(invalidDate ? 'staff-collection-date' : 'staff-collection-note')?.focus())
+        return
+      }
     }
     lock.current = true
     try {

@@ -15,30 +15,31 @@ export interface ConfirmDialogProps {
   onCancel: () => void
 }
 
-/** Native modal dialog provides focus trapping, inert backdrop and Escape. */
+/** Native showModal() supplies keyboard focus trapping and an inert backdrop. */
 export function ConfirmDialog({
   open, title, description, confirmLabel = 'Confirm', cancelLabel = 'Cancel',
   destructive = false, busy = false, disabledConfirm = false, children, onConfirm, onCancel,
 }: ConfirmDialogProps) {
   const id = useId()
-  const titleId = `${id}-title`
-  const descriptionId = `${id}-description`
   const dialogRef = useRef<HTMLDialogElement>(null)
-  const oldFocus = useRef<HTMLElement | null>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const previousFocus = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
     if (open && !dialog.open) {
-      oldFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
       dialog.showModal()
+      // Cancel is the safest initial action, especially for terminal transitions.
+      cancelRef.current?.focus()
     } else if (!open && dialog.open) {
       dialog.close()
-      oldFocus.current?.focus()
+      previousFocus.current?.focus()
     }
     return () => {
       if (dialog.open) dialog.close()
-      oldFocus.current?.focus()
+      if (open && previousFocus.current?.isConnected) previousFocus.current.focus()
     }
   }, [open])
 
@@ -48,15 +49,18 @@ export function ConfirmDialog({
   }
 
   return (
-    <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby={titleId} aria-describedby={descriptionId} onCancel={handleCancel}>
+    <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby={`${id}-title`}
+      aria-describedby={`${id}-description`} aria-modal="true" aria-busy={busy}
+      onCancel={handleCancel}>
       <div className="confirm-dialog-inner">
-        <h2 id={titleId} className="h4 mb-3">{title}</h2>
-        <p id={descriptionId} className="text-muted mb-3">{description}</p>
+        <h2 id={`${id}-title`} className="h4 mb-3">{title}</h2>
+        <p id={`${id}-description`} className="text-muted mb-3">{description}</p>
         {children}
-        <div className="d-flex justify-content-end flex-wrap gap-2 mt-4">
-          <button type="button" className="btn btn-outline-secondary" onClick={onCancel} disabled={busy}>{cancelLabel}</button>
-          <button type="button" className={`btn ${destructive ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm} disabled={busy || disabledConfirm}>
-            {busy ? 'Please wait...' : confirmLabel}
+        <div className="confirm-dialog-actions d-flex justify-content-end flex-wrap gap-2 mt-4">
+          <button ref={cancelRef} type="button" className="btn btn-outline-secondary" onClick={onCancel} disabled={busy}>{cancelLabel}</button>
+          <button type="button" className={`btn ${destructive ? 'btn-danger' : 'btn-primary'}`}
+            onClick={onConfirm} disabled={busy || disabledConfirm}>
+            {busy ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />Please wait...</> : confirmLabel}
           </button>
         </div>
       </div>

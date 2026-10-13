@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { FieldErrors } from '../api/contracts'
 import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { FeedbackBanner } from '../components/FeedbackBanner'
+import { focusFirstInvalidField } from '../components/formFocus'
 import type { FeedbackVariant } from '../components/FeedbackBanner'
 import { useAuth } from './AuthContext'
 import { roleHome, safeIntendedLocation } from './routing'
@@ -30,6 +31,7 @@ export function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,7 +40,10 @@ export function LoginPage() {
     clearNotice()
     const errors = validateLogin({ email, password })
     setFieldErrors(errors)
-    if (Object.keys(errors).length > 0) return
+    if (Object.keys(errors).length > 0) {
+      focusFirstInvalidField(formRef.current, Object.keys(errors))
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -47,7 +52,10 @@ export function LoginPage() {
       navigate(safeIntendedLocation(location.state) ?? roleHome(user.role), { replace: true, state: null })
     } catch (error: unknown) {
       const apiError = getApiError(error)
-      if (apiError?.fieldErrors) setFieldErrors(apiError.fieldErrors)
+      if (apiError?.fieldErrors) {
+        setFieldErrors(apiError.fieldErrors)
+        focusFirstInvalidField(formRef.current, Object.keys(apiError.fieldErrors))
+      }
       let message = getSafeErrorMessage(error, 'Unable to sign in. Please try again.')
       if (apiError?.code === 'AUTH_INVALID_CREDENTIALS') message = 'Email or password is incorrect.'
       else if (apiError?.code === 'ACCOUNT_INACTIVE') message = 'This account is inactive. Contact an administrator.'
@@ -71,7 +79,7 @@ export function LoginPage() {
       {noticeMessage && <div className="mb-4"><FeedbackBanner variant={notice === 'inactive' ? 'warning' : 'info'} message={noticeMessage} onDismiss={clearNotice} /></div>}
       {feedback && <div className="mb-4"><FeedbackBanner {...feedback} onDismiss={() => setFeedback(null)} /></div>}
 
-      <form onSubmit={(event) => void handleSubmit(event)} noValidate>
+      <form ref={formRef} onSubmit={(event) => void handleSubmit(event)} noValidate>
         <div className="form-field">
           <label className="form-label" htmlFor="login-email">Email address</label>
           <input

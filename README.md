@@ -1,6 +1,6 @@
 # UniDoc
 
-UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements **Issues 1–17** of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student request tracking, staff review and information cycles, electronic issued-PDF delivery, physical collection, and **Issue 17 administrator monitoring, dashboard, reports, and safe CSV export**. Deterministic demo data and release verification remain in subsequent issues.
+UniDoc is a local university document-request management system built with Java 21/Spring Boot, React/TypeScript, MySQL and protected local file storage. This source implements **Issues 1–18** of the approved implementation plan: authentication, profiles, account/catalogue administration, notifications, protected files, student request tracking, staff review and information cycles, electronic issued-PDF delivery, physical collection, and **Issue 17 administrator monitoring, dashboard, reports, and safe CSV export**, plus **Issue 18 responsive, accessible, recoverable cross-feature UX**. Deterministic demo data and release verification remain in subsequent issues.
 
 
 ## Prerequisites
@@ -491,3 +491,25 @@ npm --prefix frontend run build
 Sign in as ADMIN and inspect `/admin/dashboard`, `/admin/requests`, `/admin/requests/{id}` and `/admin/reports`. Check combined filtering, back-navigation, loading/empty states, report pagination, and UTF-8 CSV contents against the same filtered records across multiple pages. Ensure an ADMIN cannot call `/api/staff/**` or download issued/supporting documents; verify STAFF/STUDENT cannot call admin endpoints. Check at 360, 768 and 1366 px. See `docs/issue-17-implementation-checklist.md` for complete requirements and acceptance.
 
 **Environment verification:** Backend **production** Java 21 compilation, strict TypeScript compilation, and 39 Node tests passed in the provided Linux sandbox. Maven/JUnit integration tests, MySQL runtime checks, Oxlint and the Vite build still require a Windows test run: the supplied `node_modules` is Windows-native, and Maven/test dependencies cannot be retrieved in this sandbox. Those checks are **not** claimed as passed.
+
+
+## Issue 18 — Responsive, accessible, recoverable UX
+
+Issue 18 consolidates the existing **#970000** maroon/neutral visual vocabulary without changing workflows or REST API contracts. The shared `RequestStatus` component renders all eight statuses with readable text, restrained semantic feedback and safe unknown-value fallback. The native confirmation dialog enforces modal focus trapping and Escape handling, defaults to a safe Cancel focus target and returns focus after dismissal; long forms scroll within viewport bounds. Responsive navigation supports the Escape key and expanded-state announcements. Reduced-motion users get static loading feedback and minimal transitions.
+
+Form errors across login/registration, request creation/information responses, admin user/catalogue and staff decisions focus the first invalid control when practical. Search/report filters can be cleared from their current draft state; mobile lists and report tables retain crucial fields, and pagination announces the current page. Refreshed list/dashboard content remains visible with an explicit **stale-data warning and retry** when a background read fails. The top-level render-error fallback offers safe reload/navigation without exposing stack traces.
+
+Central API recovery uses consistent messages for revoked/expired sessions (return to login), inactive accounts (contact admin), ordinary forbidden access (preserve session), 409 workflow conflicts (refetch before another decision), network interruptions (do not blindly repeat mutations), and failed storage/downloads (no fake completion). Bounded JSON errors received as binary blobs are decoded before session-handling rules.
+
+**Local implementation checks:** strict TypeScript compilation and all **45 frontend Node tests** passed, including six new tests for status semantics and error recovery. **The Windows lint/Vite build, full Maven tests/package, and authenticated Chrome/Edge accessibility/responsive walkthroughs remain mandatory acceptance gates**, not results claimed from this isolated Linux environment. Full implementation map, manual route/viewport matrix and result template: `docs/issue-18-implementation-checklist.md`.
+
+From a Windows PowerShell terminal at the repository root:
+
+```powershell
+.\backend\mvnw.cmd -f backend\pom.xml clean test
+.\backend\mvnw.cmd -f backend\pom.xml clean package
+npm --prefix frontend ci
+npm --prefix frontend run test:requests
+npm --prefix frontend run lint
+npm --prefix frontend run build
+```

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { PageResponse } from '../api/contracts'
 import { getApiError, getSafeErrorMessage } from '../api/errors'
@@ -13,7 +13,7 @@ import type { AdminDocumentType, DocumentTypeFilters } from './documentTypesApi'
 import './catalogue.css'
 
 type Filters = { q: string; active: boolean | ''; sort: NonNullable<DocumentTypeFilters['sort']>; direction: NonNullable<DocumentTypeFilters['direction']> }
-type LoadState = 'loading' | 'error' | 'ready'
+type LoadState = 'loading' | 'error' | 'ready' | 'refreshing' | 'stale'
 type Feedback = { variant: FeedbackVariant; message: string; requestId?: string | null }
 const DEFAULT_FILTERS: Filters = { q: '', active: '', sort: 'name', direction: 'asc' }
 const dateFormatter = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
@@ -39,28 +39,32 @@ export function AdminDocumentTypesPage() {
   const [editItem, setEditItem] = useState<AdminDocumentType | null>(null)
   const [statusItem, setStatusItem] = useState<AdminDocumentType | null>(null)
   const [openingEditId, setOpeningEditId] = useState<number | null>(null)
+  const loadedKey = useRef<string | null>(null)
+  const viewKey = JSON.stringify([filters, page])
 
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
-      setState('loading')
+      const sameResults = loadedKey.current === viewKey
+      setState(sameResults ? 'refreshing' : 'loading')
       setLoadError(null)
       try {
         const next = await listAdminDocumentTypes({ ...filters, page, size: 20 }, controller.signal)
         if (controller.signal.aborted) return
         if (next.totalPages > 0 && page >= next.totalPages) { setPage(next.totalPages - 1); return }
         setResults(next)
+        loadedKey.current = viewKey
         setState('ready')
       } catch (failure: unknown) {
         if (!controller.signal.aborted) {
           setLoadError({ message: getSafeErrorMessage(failure, 'Unable to load document types.'), requestId: getApiError(failure)?.requestId })
-          setState('error')
+          setState(sameResults ? 'stale' : 'error')
         }
       }
     }
     void load()
     return () => controller.abort()
-  }, [filters, page, reload])
+  }, [filters, page, reload, viewKey])
 
   function refresh() { setReload((n) => n + 1) }
   function changeFilter<K extends keyof Filters>(name: K, value: Filters[K]) {
@@ -157,20 +161,22 @@ export function AdminDocumentTypesPage() {
       <section className="surface-card catalogue-admin-results" aria-labelledby="catalogue-results-heading">
         <div className="admin-users-results-heading">
           <div><h2 className="h5 mb-1" id="catalogue-results-heading">Catalogue entries</h2>
-            <p className="small text-muted mb-0">{state === 'ready' && results ? `${results.totalItems} matching document ${results.totalItems === 1 ? 'type' : 'types'}` : 'Active and inactive entries'}</p>
+            <p className="small text-muted mb-0">{(state === 'ready' || state === 'refreshing' || state === 'stale') && results ? `${results.totalItems} matching document ${results.totalItems === 1 ? 'type' : 'types'}` : 'Active and inactive entries'}</p>
           </div>
-          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={state === 'loading'} onClick={refresh}>Refresh</button>
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={state === 'loading' || state === 'refreshing'} onClick={refresh}>Refresh</button>
         </div>
         {state === 'loading' && <div className="admin-users-result-content"><PageState status="loading" message="Loading catalogue entries..." /></div>}
+        {state === 'refreshing' && <p role="status" className="small text-muted px-4 mt-3 mb-0">Updating catalogue entries…</p>}
+        {state === 'stale' && <div role="alert" className="px-4 mt-3"><p className="request-inline-error">Unable to refresh catalogue entries. The previous list remains visible. {loadError?.message}</p><button type="button" className="btn btn-outline-primary btn-sm" onClick={refresh}>Try again</button></div>}
         {state === 'error' && <div className="admin-users-result-content"><PageState status="error" message={loadError?.message ?? 'Unable to load document types.'}
           requestId={loadError?.requestId} onRetry={refresh} /></div>}
-        {state === 'ready' && results && results.items.length === 0 && <div className="admin-users-result-content">
+        {(state === 'ready' || state === 'refreshing' || state === 'stale') && results && results.items.length === 0 && <div className="admin-users-result-content">
           <PageState status="empty" title={filtered ? 'No matching document types' : 'Your catalogue is empty'}
             message={filtered ? 'Try a different code, name or visibility filter.' : 'Create the first document type to make it available for request selection.'}
             action={filtered ? <button type="button" className="btn btn-outline-primary" onClick={clearFilters}>Clear filters</button> :
               <button type="button" className="btn btn-primary" onClick={() => setCreateOpen(true)}>Create document type</button>} />
         </div>}
-        {state === 'ready' && results && results.items.length > 0 && <>
+        {(state === 'ready' || state === 'refreshing' || state === 'stale') && results && results.items.length > 0 && <>
           <div className="catalogue-admin-table-scroll d-none d-lg-block">
             <table className="table catalogue-admin-table mb-0">
               <thead><tr><th scope="col">Document</th><th scope="col">Delivery</th><th scope="col">Supporting documents</th><th scope="col">Visibility</th><th scope="col">Created</th><th scope="col">Actions</th></tr></thead>

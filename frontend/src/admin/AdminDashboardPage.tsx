@@ -21,7 +21,7 @@ const STAT_CARDS: { key: keyof Pick<AdminDashboard, 'totalRequests' | 'pendingRe
 
 export function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboard | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'error' | 'refreshing' | 'stale'>('loading')
   const [error, setError] = useState<{ message: string; requestId?: string | null } | null>(null)
   const [reload, setReload] = useState(0)
   useEffect(() => {
@@ -31,7 +31,7 @@ export function AdminDashboardPage() {
     }).catch((failure: unknown) => {
       if (!controller.signal.aborted) {
         setError({ message: getSafeErrorMessage(failure, 'Unable to load dashboard.'), requestId: getApiError(failure)?.requestId })
-        setState('error')
+        setState((current) => current === 'refreshing' ? 'stale' : 'error')
       }
     })
     return () => controller.abort()
@@ -39,11 +39,13 @@ export function AdminDashboardPage() {
 
   return <>
     <PageHeader eyebrow="Administration" title="Request dashboard" description="Current request activity across the university. Statistics use committed workflow states."
-      actions={<button type="button" className="btn btn-outline-primary" disabled={state === 'loading'} onClick={() => { setState('loading'); setReload((n) => n + 1) }}>Refresh</button>} />
+      actions={<button type="button" className="btn btn-outline-primary" disabled={state === 'loading' || state === 'refreshing'} onClick={() => { setState(data ? 'refreshing' : 'loading'); setReload((n) => n + 1) }}>Refresh</button>} />
     {state === 'loading' && <PageState status="loading" message="Calculating request statistics..." />}
+    {state === 'refreshing' && <p role="status" className="small text-muted mb-3">Refreshing dashboard statistics…</p>}
+    {state === 'stale' && <div role="alert" className="mb-3"><p className="request-inline-error">Unable to refresh the dashboard. Previous counts are shown and may be out of date. {error?.message}</p><button className="btn btn-outline-primary btn-sm" onClick={() => { setState('refreshing'); setReload((n) => n + 1) }}>Try again</button></div>}
     {state === 'error' && <PageState status="error" title="Unable to load dashboard" message={error?.message ?? 'Please retry.'}
       requestId={error?.requestId} onRetry={() => { setState('loading'); setReload((n) => n + 1) }} />}
-    {state === 'ready' && data && <>
+    {(state === 'ready' || state === 'refreshing' || state === 'stale') && data && <>
       <section aria-label="Request statistics" className="admin-stat-grid">
         {STAT_CARDS.map((metric) => <div className="surface-card admin-stat-card" key={metric.key}>
           <p className="section-eyebrow mb-2">{metric.title}</p>

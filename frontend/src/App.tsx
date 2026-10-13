@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { AdminUsersPage } from './admin/AdminUsersPage'
 import { DocumentCataloguePage } from './catalogue/DocumentCataloguePage'
 import { AdminDocumentTypesPage } from './catalogue/AdminDocumentTypesPage'
@@ -24,8 +25,10 @@ import { StaffRequestDetailPage } from './staff/StaffRequestDetailPage'
 import './styles.css'
 
 function App() {
+  const location = useLocation()
   return (
     <AuthProvider>
+      <AppErrorBoundary key={location.pathname}>
       <Routes>
         <Route element={<PublicOnlyRoute />}>
           <Route element={<PublicLayout />}>
@@ -66,6 +69,7 @@ function App() {
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </AppErrorBoundary>
     </AuthProvider>
   )
 }

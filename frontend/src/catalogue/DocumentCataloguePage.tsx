@@ -9,7 +9,7 @@ import { listActiveDocumentTypes } from './documentTypesApi'
 import type { CatalogueDocumentType } from './documentTypesApi'
 import './catalogue.css'
 
-type LoadState = 'loading' | 'error' | 'ready'
+type LoadState = 'loading' | 'error' | 'ready' | 'refreshing' | 'stale'
 
 export function DocumentCataloguePage() {
   const { user } = useAuth()
@@ -21,14 +21,14 @@ export function DocumentCataloguePage() {
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
-      setState('loading')
+      setState((current) => current === 'ready' || current === 'stale' ? 'refreshing' : 'loading')
       try {
         const result = await listActiveDocumentTypes(controller.signal)
         if (!controller.signal.aborted) { setItems(result); setError(null); setState('ready') }
       } catch (failure: unknown) {
         if (!controller.signal.aborted) {
           setError({ message: getSafeErrorMessage(failure, 'Unable to load the document catalogue.'), requestId: getApiError(failure)?.requestId })
-          setState('error')
+          setState((current) => current === 'refreshing' ? 'stale' : 'error')
         }
       }
     }
@@ -42,15 +42,17 @@ export function DocumentCataloguePage() {
         description="Explore available university documents, their requirements and the supported delivery methods."
         actions={<div className="d-flex gap-2 flex-wrap">
           {user?.role === 'ADMIN' && <Link to="/admin/document-types" className="btn btn-outline-primary">Manage document types</Link>}
-          <button type="button" className="btn btn-outline-secondary" disabled={state === 'loading'} onClick={() => setReload((n) => n + 1)}>Refresh</button>
+          <button type="button" className="btn btn-outline-secondary" disabled={state === 'loading' || state === 'refreshing'} onClick={() => setReload((n) => n + 1)}>Refresh</button>
         </div>} />
       {state === 'loading' && <PageState status="loading" message="Loading available document types..." />}
+      {state === 'refreshing' && <p role="status" className="small text-muted mb-3">Refreshing catalogue…</p>}
+      {state === 'stale' && <div role="alert" className="mb-3"><p className="request-inline-error">Unable to refresh the catalogue. Previously loaded entries remain visible. {error?.message}</p><button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setReload((n) => n + 1)}>Try again</button></div>}
       {state === 'error' && <PageState status="error" title="Catalogue unavailable"
         message={error?.message ?? 'Unable to load the catalogue.'} requestId={error?.requestId}
         onRetry={() => setReload((n) => n + 1)} />}
-      {state === 'ready' && items.length === 0 && <PageState status="empty" title="No documents available yet"
+      {(state === 'ready' || state === 'refreshing' || state === 'stale') && items.length === 0 && <PageState status="empty" title="No documents available yet"
         message="There are no active document types to request. Please check again later or contact the university administration." />}
-      {state === 'ready' && items.length > 0 && (
+      {(state === 'ready' || state === 'refreshing' || state === 'stale') && items.length > 0 && (
         <>
           <p className="catalogue-summary">{items.length} available document {items.length === 1 ? 'type' : 'types'} · Ordered by name</p>
           <div className="catalogue-grid">

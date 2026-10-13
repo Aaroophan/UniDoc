@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, REQUEST_STATUSES, REQUEST_STATUS_LABELS } from '../api/contracts'
@@ -7,6 +7,7 @@ import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { listActiveDocumentTypes } from '../catalogue/documentTypesApi'
 import type { CatalogueDocumentType } from '../catalogue/documentTypesApi'
 import { PageHeader } from '../components/PageHeader'
+import { focusFirstInvalidField } from '../components/formFocus'
 import { PageState } from '../components/PageState'
 import { Pagination } from '../components/Pagination'
 import { RequestStatus as RequestStatusBadge } from '../components/RequestStatus'
@@ -16,7 +17,7 @@ import { listAdminRequests } from '../admin/adminInsightsApi'
 import type { StaffRequestFilters, StaffRequestSort, StaffRequestSummary } from './staffRequestsApi'
 import './staff.css'
 
-type LoadState = 'loading' | 'error' | 'ready'
+type LoadState = 'loading' | 'error' | 'ready' | 'refreshing' | 'stale'
 const SORTS: StaffRequestSort[] = ['createdAt', 'updatedAt', 'requiredDate', 'status', 'requestNumber']
 
 function safePage(value: string | null): number {
@@ -47,15 +48,15 @@ function readFilters(params: URLSearchParams): StaffRequestFilters {
   }
 }
 
-function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered, mode }: {
+function StaffFilters({ activeTypes, selected, onApply, onClear, mode }: {
   activeTypes: CatalogueDocumentType[]
   selected: StaffRequestFilters
   onApply: (filters: StaffRequestFilters) => void
   onClear: () => void
-  isFiltered: boolean
   mode: 'staff' | 'admin'
 }) {
   const [validation, setValidation] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const selectedId = selected.documentTypeId
   const missingType = selectedId && !activeTypes.some((type) => type.id === selectedId)
 
@@ -67,6 +68,7 @@ function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered, mod
     const to = get('submittedTo')
     if (from && to && from > to) {
       setValidation('Submitted from cannot be later than submitted to.')
+      focusFirstInvalidField(event.currentTarget, ['submittedTo'])
       return
     }
     setValidation(null)
@@ -84,10 +86,10 @@ function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered, mod
   }
 
   return (
-    <form className="surface-card request-filters staff-filters" aria-label={mode === 'admin' ? 'Filter monitored requests' : 'Filter staff requests'} onSubmit={submit}>
+    <form ref={formRef} className="surface-card request-filters staff-filters" aria-label={mode === 'admin' ? 'Filter monitored requests' : 'Filter staff requests'} onSubmit={submit}>
       <div className="request-filters-header">
         <div><h2 className="h5 mb-1">Find requests</h2><p className="small text-muted mb-0">{mode === 'admin' ? 'Monitor submitted requests across all students without changing their status.' : 'The same shared work list is visible to every active staff member.'}</p></div>
-        <button type="button" className="btn btn-outline-secondary btn-sm" disabled={!isFiltered} onClick={onClear}>Clear all</button>
+        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => { setValidation(null); formRef.current?.reset(); onClear() }}>Clear all</button>
       </div>
       <div className="staff-filter-grid">
         <div className="staff-filter-search">
@@ -123,7 +125,7 @@ function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered, mod
         </div>
         <div>
           <label className="form-label" htmlFor="staff-filter-to">Submitted to (inclusive)</label>
-          <input id="staff-filter-to" name="submittedTo" type="date" className="form-control" defaultValue={selected.submittedTo ?? ''} />
+          <input id="staff-filter-to" name="submittedTo" type="date" className="form-control" aria-invalid={Boolean(validation)} aria-describedby={validation ? 'staff-filter-date-error' : undefined} defaultValue={selected.submittedTo ?? ''} />
         </div>
         <div>
           <label className="form-label" htmlFor="staff-filter-required">Required date</label>
@@ -147,7 +149,7 @@ function StaffFilters({ activeTypes, selected, onApply, onClear, isFiltered, mod
           </select>
         </div>
       </div>
-      {validation && <p className="request-inline-error mt-3" role="alert">{validation}</p>}
+      {validation && <p id="staff-filter-date-error" className="request-inline-error mt-3" role="alert">{validation}</p>}
       <div className="d-flex justify-content-end mt-4">
         <button className="btn btn-primary" type="submit">Apply filters</button>
       </div>
@@ -172,6 +174,8 @@ export function StaffWorkListPage({ mode = 'staff' }: { mode?: 'staff' | 'admin'
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [loadError, setLoadError] = useState<{ message: string; requestId?: string | null } | null>(null)
   const [reload, setReload] = useState(0)
+  const loadedKey = useRef<string | null>(null)
+  const currentKey = `${mode}/${query}`
 
   useEffect(() => {
     const controller = new AbortController()
@@ -186,7 +190,8 @@ export function StaffWorkListPage({ mode = 'staff' }: { mode?: 'staff' | 'admin'
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
-      setLoadState('loading')
+      const sameResults = loadedKey.current === currentKey
+      setLoadState(sameResults ? 'refreshing' : 'loading')
       setLoadError(null)
       try {
         const response = await (mode === 'admin' ? listAdminRequests(filters, controller.signal) : listStaffRequests(filters, controller.signal))
@@ -203,16 +208,17 @@ export function StaffWorkListPage({ mode = 'staff' }: { mode?: 'staff' | 'admin'
           return
         }
         setResults(response)
+        loadedKey.current = currentKey
         setLoadState('ready')
       } catch (error: unknown) {
         if (controller.signal.aborted) return
         setLoadError({ message: getSafeErrorMessage(error, 'Unable to load the staff work list.'), requestId: getApiError(error)?.requestId })
-        setLoadState('error')
+        setLoadState(sameResults ? 'stale' : 'error')
       }
     }
     void load()
     return () => controller.abort()
-  }, [filters, reload, setParams, mode])
+  }, [filters, reload, setParams, mode, currentKey])
 
   function applyFilters(next: StaffRequestFilters) {
     const values = new URLSearchParams()
@@ -239,24 +245,26 @@ export function StaffWorkListPage({ mode = 'staff' }: { mode?: 'staff' | 'admin'
     <>
       <PageHeader eyebrow={mode === 'admin' ? 'Administration' : 'Staff workspace'} title={mode === 'admin' ? 'Request monitoring' : 'Request work list'}
         description={mode === 'admin' ? 'Read-only oversight of student requests, delivery progress, and history. Workflow actions remain staff-only.' : 'Find and review document requests across all students. No assignment or claim step is required.'}
-        actions={<button type="button" className="btn btn-outline-primary" disabled={loadState === 'loading'} onClick={() => setReload((value) => value + 1)}>Refresh</button>} />
+        actions={<button type="button" className="btn btn-outline-primary" disabled={loadState === 'loading' || loadState === 'refreshing'} onClick={() => setReload((value) => value + 1)}>Refresh</button>} />
       {catalogueError && <p role="status" className="small text-muted">{catalogueError}</p>}
       <StaffFilters key={filterKey} selected={filters} activeTypes={activeTypes}
-        mode={mode} isFiltered={filtered || safePage(params.get('page')) > 0} onApply={applyFilters} onClear={() => setParams(new URLSearchParams())} />
+        mode={mode} onApply={applyFilters} onClear={() => setParams(new URLSearchParams())} />
       <section className="surface-card request-results" aria-labelledby="staff-results-title">
         <div className="request-results-header">
           <div><p className="section-eyebrow mb-2">University requests</p><h2 className="h5 mb-0" id="staff-results-title">{mode === 'admin' ? 'All requests' : 'Shared work list'}</h2></div>
-          {results && loadState === 'ready' && <span className="small text-muted">{results.totalItems} matching requests</span>}
+          {results && (loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && <span className="small text-muted">{results.totalItems} matching requests</span>}
         </div>
         {loadState === 'loading' && <PageState status="loading" message="Loading student requests..." />}
+        {loadState === 'refreshing' && <p role="status" className="small text-muted px-4 pt-3 mb-0">Updating results…</p>}
+        {loadState === 'stale' && <div className="px-4 pt-3" role="alert"><p className="request-inline-error">Could not refresh the work list. Previous results remain visible. {loadError?.message}</p><button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setReload((n) => n + 1)}>Try again</button></div>}
         {loadState === 'error' && <PageState status="error" title="Unable to load the request list"
           message={loadError?.message ?? 'Please try again.'} requestId={loadError?.requestId}
           onRetry={() => setReload((value) => value + 1)} />}
-        {loadState === 'ready' && results?.items.length === 0 && <PageState status="empty"
+        {(loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && results?.items.length === 0 && <PageState status="empty"
           title={filtered ? 'No matching requests' : 'No document requests yet'}
           message={filtered ? 'Try a different search, status, date, or document type.' : 'Submitted student requests will appear here.'}
           action={filtered ? <button type="button" className="btn btn-outline-primary" onClick={() => setParams(new URLSearchParams())}>Clear filters</button> : undefined} />}
-        {loadState === 'ready' && results && results.items.length > 0 && <>
+        {(loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && results && results.items.length > 0 && <>
           <div className="request-results-list">
             {results.items.map((item) => <article key={item.id} className="request-result-row staff-result-row">
               <div className="request-result-identity">

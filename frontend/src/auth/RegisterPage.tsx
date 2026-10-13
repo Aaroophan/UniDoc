@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { FieldErrors, RegisterRequest } from '../api/contracts'
 import { getApiError, getSafeErrorMessage } from '../api/errors'
 import { FeedbackBanner } from '../components/FeedbackBanner'
+import { focusFirstInvalidField } from '../components/formFocus'
 import { registerStudent } from './authApi'
 import { normalizeEmail, validateRegistration } from './validation'
 
@@ -15,6 +16,7 @@ export function RegisterPage() {
   const [message, setMessage] = useState<{ text: string; requestId?: string | null } | null>(null)
   const [successEmail, setSuccessEmail] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   function updateField(field: keyof RegisterRequest, value: string) {
     setForm((previous) => ({ ...previous, [field]: value }))
@@ -27,7 +29,10 @@ export function RegisterPage() {
     setMessage(null)
     const nextErrors = validateRegistration(form)
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return
+    if (Object.keys(nextErrors).length > 0) {
+      focusFirstInvalidField(formRef.current, Object.keys(nextErrors))
+      return
+    }
     setSubmitting(true)
     try {
       const result = await registerStudent({
@@ -41,9 +46,13 @@ export function RegisterPage() {
       setErrors({})
     } catch (error: unknown) {
       const apiError = getApiError(error)
-      if (apiError?.fieldErrors) setErrors(apiError.fieldErrors)
+      if (apiError?.fieldErrors) {
+        setErrors(apiError.fieldErrors)
+        focusFirstInvalidField(formRef.current, Object.keys(apiError.fieldErrors))
+      }
       if (apiError?.code === 'EMAIL_ALREADY_EXISTS') {
         setErrors((previous) => ({ ...previous, email: 'An account with this email already exists.' }))
+        focusFirstInvalidField(formRef.current, ['email'])
       }
       setMessage({
         text: apiError?.code === 'EMAIL_ALREADY_EXISTS'
@@ -75,7 +84,7 @@ export function RegisterPage() {
       <h1 className="auth-form-title">Create your account</h1>
       <p className="auth-form-intro">Register as a student to begin requesting university documents.</p>
       {message && <div className="mb-4"><FeedbackBanner variant="error" message={message.text} requestId={message.requestId} onDismiss={() => setMessage(null)} /></div>}
-      <form onSubmit={(event) => void handleSubmit(event)} noValidate>
+      <form ref={formRef} onSubmit={(event) => void handleSubmit(event)} noValidate>
         <div className="form-field">
           <label htmlFor="register-name" className="form-label">Full name</label>
           <input id="register-name" name="fullName" className={`form-control${errors.fullName ? ' is-invalid' : ''}`}

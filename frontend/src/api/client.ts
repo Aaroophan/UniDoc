@@ -22,12 +22,28 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+/** Axios gives binary endpoints Blob errors; decode only bounded JSON envelopes first. */
+async function recoverBinaryApiError(error: unknown): Promise<void> {
+  if (!axios.isAxiosError(error)) return
+  const data: unknown = error.response?.data
+  if (!(data instanceof Blob) || data.size > 64 * 1024) return
+  const contentType = data.type || String(error.response?.headers?.['content-type'] ?? '')
+  if (!/(?:application\/json|application\/problem\+json)/i.test(contentType)) return
+  try {
+    const decoded: unknown = JSON.parse(await data.text())
+    if (isApiErrorResponse(decoded) && error.response) error.response.data = decoded
+  } catch {
+    // Unrecognized or malformed server content must never appear in the UI.
+  }
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: unknown) => {
+  async (error: unknown) => {
     if (axios.isAxiosError(error)) {
+      await recoverBinaryApiError(error)
       const url = error.config?.url?.split('?')[0] ?? ''
-      // Wrong credentials at the public login endpoint must never end a session.
+      // Public credential failures must not terminate another valid session.
       const isPublicAuth = url.endsWith('/api/auth/login') || url.endsWith('/api/auth/register')
       if (!isPublicAuth) {
         const code = getApiError(error)?.code
@@ -40,7 +56,7 @@ apiClient.interceptors.response.use(
           } else if (error.response?.status === 403 && code === 'ACCOUNT_INACTIVE') {
             endSession('inactive', issuedToken)
           }
-          // 403 ACCESS_DENIED is a normal authorization failure, not logout.
+          // 403 ACCESS_DENIED preserves an otherwise valid session.
         }
       }
     }
@@ -56,22 +72,7 @@ export interface BinaryResponse {
 
 /** Protected browser downloads. Do not construct public filesystem URLs. */
 export async function getBinaryResource(path: string, fallbackName = 'download'): Promise<BinaryResponse> {
-  let response
-  try {
-    response = await apiClient.get<Blob>(path, { responseType: 'blob' })
-  } catch (failure: unknown) {
-    // For responseType=blob, Axios also returns JSON errors as Blobs. Recover only the
-    // documented small API error envelope; never print binary data or raw error bodies.
-    if (axios.isAxiosError(failure) && failure.response?.data instanceof Blob &&
-        failure.response.data.size <= 64 * 1024 &&
-        /(?:application\/json|application\/problem\+json)/i.test(failure.response.data.type)) {
-      try {
-        const parsed: unknown = JSON.parse(await failure.response.data.text())
-        if (isApiErrorResponse(parsed)) Object.assign(failure.response, { data: parsed })
-      } catch { /* Fall back to the standard safe network/HTTP message. */ }
-    }
-    throw failure
-  }
+  const response = await apiClient.get<Blob>(path, { responseType: 'blob' })
   const disposition = response.headers['content-disposition']
   const filename = filenameFromDisposition(typeof disposition === 'string' ? disposition : undefined, fallbackName)
   return {

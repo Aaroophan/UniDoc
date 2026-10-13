@@ -17,7 +17,7 @@ export function Pagination({ page, onPageChange, disabled = false }: PaginationP
       <span className="small text-muted">Showing {start}–{end} of {page.totalItems} results</span>
       <div className="d-flex gap-2 align-items-center">
         <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => onPageChange(page.page - 1)} disabled={disabled || page.first} aria-label="Previous page">Previous</button>
-        <span className="small px-2" aria-current="page">Page {page.page + 1} of {Math.max(page.totalPages, 1)}</span>
+        <span className="small px-2" aria-current="page" aria-live="polite" aria-atomic="true">Page {page.page + 1} of {Math.max(page.totalPages, 1)}</span>
         <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => onPageChange(page.page + 1)} disabled={disabled || page.last} aria-label="Next page">Next</button>
       </div>
     </nav>

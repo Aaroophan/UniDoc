@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DELIVERY_METHOD_LABELS, DELIVERY_METHODS, REQUEST_STATUSES, REQUEST_STATUS_LABELS } from '../api/contracts'
 import type { DeliveryMethod, PageResponse, RequestStatus } from '../api/contracts'
@@ -12,7 +12,7 @@ import { listStudentRequests } from './requestsApi'
 import type { StudentRequestSummary } from './requestsApi'
 import './requests.css'
 
-type LoadState = 'loading' | 'error' | 'ready'
+type LoadState = 'loading' | 'error' | 'ready' | 'refreshing' | 'stale'
 
 function safePage(value: string | null): number {
   if (!value || !/^(0|[1-9][0-9]*)$/.test(value)) return 0
@@ -33,6 +33,8 @@ export function MyRequestsPage() {
   const [results, setResults] = useState<PageResponse<StudentRequestSummary> | null>(null)
   const [loadError, setLoadError] = useState<{ message: string; requestId?: string | null } | null>(null)
   const [reload, setReload] = useState(0)
+  const loadedKey = useRef<string | null>(null)
+  const currentKey = `${status}/${deliveryMethod}/${page}`
 
   function setFilter(name: 'status' | 'deliveryMethod', value: string) {
     setSearchParams((previous) => {
@@ -57,7 +59,8 @@ export function MyRequestsPage() {
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
-      setLoadState('loading')
+      const sameResults = loadedKey.current === currentKey
+      setLoadState(sameResults ? 'refreshing' : 'loading')
       setLoadError(null)
       try {
         const result = await listStudentRequests({
@@ -78,16 +81,17 @@ export function MyRequestsPage() {
           return
         }
         setResults(result)
+        loadedKey.current = currentKey
         setLoadState('ready')
       } catch (failure: unknown) {
         if (controller.signal.aborted) return
         setLoadError({ message: getSafeErrorMessage(failure, 'Unable to load your requests.'), requestId: getApiError(failure)?.requestId })
-        setLoadState('error')
+        setLoadState(sameResults ? 'stale' : 'error')
       }
     }
     void load()
     return () => controller.abort()
-  }, [status, deliveryMethod, page, reload, setPage])
+  }, [status, deliveryMethod, page, reload, setPage, currentKey])
 
   function clearFilters() {
     setSearchParams(new URLSearchParams())
@@ -126,19 +130,21 @@ export function MyRequestsPage() {
             <p className="section-eyebrow mb-2">Request history</p>
             <h2 className="h5 mb-0" id="request-results-title">Your document requests</h2>
           </div>
-          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={loadState === 'loading'} onClick={() => setReload((value) => value + 1)}>Refresh</button>
+          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={loadState === 'loading' || loadState === 'refreshing'} onClick={() => setReload((value) => value + 1)}>Refresh</button>
         </div>
         {loadState === 'loading' && <PageState status="loading" message="Loading your requests..." />}
+        {loadState === 'refreshing' && <p role="status" className="small text-muted px-4 pt-3 mb-0">Updating results…</p>}
+        {loadState === 'stale' && <div className="px-4 pt-3" role="alert"><p className="request-inline-error">Could not refresh requests. Previous results remain visible. {loadError?.message}</p><button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}
         {loadState === 'error' && <PageState status="error" title="Unable to load requests"
           message={loadError?.message ?? 'Try refreshing your requests.'} requestId={loadError?.requestId}
           onRetry={() => setReload((value) => value + 1)} />}
-        {loadState === 'ready' && results && results.items.length === 0 && (
+        {(loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && results && results.items.length === 0 && (
           <PageState status="empty" title={filtered ? 'No matching requests' : 'No requests submitted yet'}
             message={filtered ? 'No requests match these filters. Try another status or delivery method.' : 'Start with the document catalogue, choose a document, and submit your first request.'}
             action={filtered ? <button type="button" onClick={clearFilters} className="btn btn-outline-primary">Clear filters</button>
               : <Link to="/catalogue" className="btn btn-primary">Browse documents</Link>} />
         )}
-        {loadState === 'ready' && results && results.items.length > 0 && (
+        {(loadState === 'ready' || loadState === 'refreshing' || loadState === 'stale') && results && results.items.length > 0 && (
           <>
             <div className="request-results-list">
               {results.items.map((request) => (

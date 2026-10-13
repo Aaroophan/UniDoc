@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { PageResponse, NotificationType } from '../api/contracts'
 import { NOTIFICATION_TYPES, NOTIFICATION_TYPE_LABELS } from '../api/contracts'
@@ -13,7 +13,7 @@ import type { NotificationItem } from './notificationsApi'
 import './notifications.css'
 
 type ReadFilter = 'all' | 'unread' | 'read'
-type LoadState = 'loading' | 'ready' | 'error'
+type LoadState = 'loading' | 'ready' | 'error' | 'refreshing' | 'stale'
 type Feedback = { kind: 'error' | 'success' | 'warning'; message: string; requestId?: string | null }
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -33,11 +33,14 @@ export function NotificationsPage() {
   const [loadingError, setLoadingError] = useState<{ message: string; requestId?: string | null } | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [pending, setPending] = useState<number | 'all' | null>(null)
+  const loadedKey = useRef<string | null>(null)
+  const viewKey = `${readFilter}/${typeFilter}/${page}`
 
   useEffect(() => {
     const controller = new AbortController()
     async function load() {
-      setStatus('loading')
+      const sameResults = loadedKey.current === viewKey
+      setStatus(sameResults ? 'refreshing' : 'loading')
       setLoadingError(null)
       try {
         const next = await listNotifications({
@@ -49,16 +52,17 @@ export function NotificationsPage() {
         if (controller.signal.aborted) return
         if (next.totalPages > 0 && page >= next.totalPages) { setPage(next.totalPages - 1); return }
         setResults(next)
+        loadedKey.current = viewKey
         setStatus('ready')
       } catch (failure: unknown) {
         if (controller.signal.aborted) return
         setLoadingError({ message: getSafeErrorMessage(failure, 'Unable to load notifications.'), requestId: getApiError(failure)?.requestId })
-        setStatus('error')
+        setStatus(sameResults ? 'stale' : 'error')
       }
     }
     void load()
     return () => controller.abort()
-  }, [readFilter, typeFilter, page, reload])
+  }, [readFilter, typeFilter, page, reload, viewKey])
 
   async function markOne(id: number) {
     setPending(id)
@@ -103,17 +107,17 @@ export function NotificationsPage() {
     setFeedback(null)
   }
 
-  const isEmpty = status === 'ready' && results?.items.length === 0
+  const isEmpty = (status === 'ready' || status === 'refreshing' || status === 'stale') && results?.items.length === 0
 
   return (
     <>
       <PageHeader eyebrow="Your updates" title="Notifications"
         description="Request updates are saved here even when email delivery is unavailable. Only you can view and mark your notifications."
         actions={<div className="d-flex flex-wrap gap-2 align-items-center">
-          <button type="button" className="btn btn-outline-secondary" disabled={status === 'loading' || pending !== null}
+          <button type="button" className="btn btn-outline-secondary" disabled={status === 'loading' || status === 'refreshing' || pending !== null}
             onClick={() => { setReload((n) => n + 1); void refreshUnreadCount() }}>Refresh</button>
           <button type="button" className="btn btn-primary" onClick={() => void markAll()}
-            disabled={pending !== null || status !== 'ready'}>
+            disabled={pending !== null || (status !== 'ready' && status !== 'stale')}>
             {pending === 'all' ? 'Marking...' : 'Mark all as read'}
           </button>
         </div>} />
@@ -150,12 +154,14 @@ export function NotificationsPage() {
       </section>
 
       {status === 'loading' && <PageState status="loading" message="Loading your notifications..." />}
+      {status === 'refreshing' && <p role="status" className="small text-muted mb-3">Updating notifications…</p>}
+      {status === 'stale' && <div role="alert" className="mb-3"><p className="request-inline-error">Unable to refresh notifications. Previous results remain visible. {loadingError?.message}</p><button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setReload((n) => n + 1)}>Try again</button></div>}
       {status === 'error' && <PageState status="error" title="Notifications unavailable"
         message={loadingError?.message ?? 'Unable to load your notifications.'} requestId={loadingError?.requestId}
         onRetry={() => setReload((n) => n + 1)} />}
       {isEmpty && <PageState status="empty" title={readFilter === 'unread' ? 'You are all caught up' : readFilter === 'read' ? 'No read notifications' : 'No notifications yet'}
         message={readFilter === 'unread' ? 'There are no unread updates matching your filters.' : readFilter === 'read' ? 'Read notifications will appear here after you mark them as read.' : typeFilter ? 'No notifications match this event type.' : 'Updates about your document requests will appear here as requests are processed.'} />}
-      {status === 'ready' && results && results.items.length > 0 && (
+      {(status === 'ready' || status === 'refreshing' || status === 'stale') && results && results.items.length > 0 && (
         <section className="notification-list" aria-label="Your notifications">
           {results.items.map((item) => {
             const action = safeNotificationPath(item.actionPath)
