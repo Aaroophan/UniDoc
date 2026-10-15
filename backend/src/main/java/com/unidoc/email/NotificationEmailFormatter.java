@@ -25,7 +25,7 @@ public class NotificationEmailFormatter {
         if (data.title() == null || data.title().isBlank() || data.message() == null || data.message().isBlank()) {
             throw new IllegalArgumentException("Email notification content is required.");
         }
-        String title = data.title().replace('\r', ' ').replace('\n', ' ').trim();
+        String title = data.title().replace('\r', ' ').replace('\n', ' ').trim(); 
         String path = NotificationService.safeActionPath(data.actionPath());
         if (path == null) path = "/notifications";
         SimpleMailMessage mail = new SimpleMailMessage();
